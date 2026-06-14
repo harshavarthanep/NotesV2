@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#1a73e8">
@@ -209,7 +209,7 @@
 
         /* ── MOBILE TOOLBAR BOTTOM MODE ── */
         /* Applied via body.toolbar-bottom class toggled by JS */
-        @media (max-width: 850px) {
+        /* @media (max-width: 850px) {
             body.toolbar-bottom #toolbar.ql-toolbar {
                 position: fixed !important;
                 bottom: 0 !important; left: 0 !important; right: 0 !important; top: auto !important;
@@ -217,16 +217,39 @@
                 margin: 0 !important;
                 border-top: 1px solid var(--border-color) !important;
                 border-bottom: none !important;
-                z-index: 200 !important;
+                z-index: 200 !important; */
                 /* Safe area for iPhone home bar */
-                padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-            }
+                /* padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; */
+            /* } */
             /* Extra bottom padding on editor so content isn't hidden behind fixed toolbar */
-            body.toolbar-bottom .ql-editor { padding-bottom: 80px !important; }
-        }
+            /* body.toolbar-bottom .ql-editor { padding-bottom: 80px !important; }
+        } */
+
+        /* ── MOBILE TOOLBAR BOTTOM MODE ── */
+        /* Applied via body.toolbar-bottom class toggled by JS */
+            @media (max-width: 850px) {
+                body.toolbar-bottom #toolbar.ql-toolbar {
+                    position: fixed !important;
+                    /* Dynamically anchors above the keyboard using our JS variable, defaults to 0 */
+                    bottom: var(--keyboard-offset, 0px) !important; 
+                    left: 0 !important; right: 0 !important; top: auto !important;
+                    border-radius: 0 !important;
+                    margin: 0 !important;
+                    border-top: 1px solid var(--border-color) !important;
+                    border-bottom: none !important;
+                    /* Lowered from 200 to 50 so Sidebar (z-65) and Overlay (z-60) stay on top */
+                    z-index: 50 !important;
+                    /* Safe area for iPhone home bar */
+                    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+                    transition: bottom 0.1s ease-out;
+                }
+                /* Extra bottom padding on editor so content isn't hidden behind fixed toolbar */
+                body.toolbar-bottom .ql-editor { padding-bottom: 140px !important; }
+            }
+        
     </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col font-sans text-text bg-bg transition-colors duration-300">
+<body class="h-[100dvh] w-screen overflow-hidden flex flex-col font-sans text-text bg-bg transition-colors duration-300">
 
     <!-- TOAST -->
     <div id="toast"></div>
@@ -2115,6 +2138,27 @@
             if (icon) icon.style.transform = 'rotate(180deg)';
         }
     }
+
+        // new code
+
+    /* ============================================================
+       MOBILE KEYBOARD TOOLBAR DOCKING FIX
+    ============================================================ */
+    if (window.visualViewport) {
+        const updateKeyboardOffset = () => {
+            // Calculate how much the virtual keyboard pushed the viewport up
+            const offset = window.innerHeight - window.visualViewport.height;
+            // Pass this value to our CSS so the toolbar floats directly above it
+            document.documentElement.style.setProperty('--keyboard-offset', `${Math.max(0, offset)}px`);
+        };
+        
+        window.visualViewport.addEventListener('resize', updateKeyboardOffset);
+        window.visualViewport.addEventListener('scroll', updateKeyboardOffset);
+        
+        // Initial setup
+        updateKeyboardOffset();
+    }
+        // new code here
 
     /* ============================================================
        INIT
