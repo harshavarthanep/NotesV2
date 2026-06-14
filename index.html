@@ -1766,101 +1766,24 @@
         setTimeout(() => jumpToComment(cid), 100);
     }
 
-    // async function deleteComment(cid) {
-    //     if (!confirm('Resolve and remove this note?')) return;
-
-    //     const activeDoc = state.docs.find(d => d.id === state.docId);
-    //     const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
-
-    //     // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
-    //     if (!isSharedReceiver) {
-    //         const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
-    //         if (span) {
-    //             const blot = Quill.find(span);
-    //             if (blot) {
-    //                 const i = quill.getIndex(blot);
-    //                 quill.formatText(i, span.textContent.length, 'comment', false);
-    //             }
-    //         }
-    //     }
-
-
     async function deleteComment(cid) {
         if (!confirm('Resolve and remove this note?')) return;
 
         const activeDoc = state.docs.find(d => d.id === state.docId);
         const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
 
-        // 1. Remove highlight mathematically using Quill's internal engine
+        // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
         if (!isSharedReceiver) {
-            const delta = quill.getContents();
-            let currIndex = 0;
-            const ranges = [];
-            
-            if (delta && delta.ops) {
-                delta.ops.forEach(op => {
-                    const len = typeof op.insert === 'string' ? op.insert.length : (op.insert ? 1 : 0);
-                    if (op.attributes && op.attributes.comment === cid) {
-                        ranges.push({ index: currIndex, length: len });
-                    }
-                    currIndex += len;
-                });
-            }
-
-            // Strip format backwards to prevent index shifting
-            for (let i = ranges.length - 1; i >= 0; i--) {
-                quill.formatText(ranges[i].index, ranges[i].length, 'comment', false, 'silent');
-            }
-            
-            // CRITICAL FIX: Tell the app you "typed" so it ignores the incoming Firebase snapshot!
-            state.lastTypeTime = Date.now();
-        }
-        
-        // Optimistic UI update
-        delete state.comments[cid];
-        renderComments();
-
-        // 2. Prepare atomic delete for the comments object
-        const fieldPath = 'comments.' + cid;
-        const atomicUpdate = { [fieldPath]: firebase.firestore.FieldValue.delete() };
-
-        try {
-            if (isSharedReceiver) {
-                await db.collection('shared_docs').doc(activeDoc.importedFromShareId).update(atomicUpdate);
-                await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update(atomicUpdate);
-            } else {
-                // CRITICAL FIX: Instantly bundle the cleaned text into the EXACT SAME database call!
-                atomicUpdate['content'] = JSON.parse(JSON.stringify(quill.getContents()));
-                atomicUpdate['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
-
-                await db.collection('users').doc(state.user.uid)
-                    .collection('docs').doc(state.docId)
-                    .update(atomicUpdate);
-
-                if (activeDoc && activeDoc.shareId) {
-                    await db.collection('shared_docs').doc(activeDoc.shareId).update({
-                        [fieldPath]: firebase.firestore.FieldValue.delete(),
-                        'c': atomicUpdate['content'],
-                        'theme': localStorage.getItem('theme') || 'light'
-                    });
+            const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
+            if (span) {
+                const blot = Quill.find(span);
+                if (blot) {
+                    const i = quill.getIndex(blot);
+                    quill.formatText(i, span.textContent.length, 'comment', false);
                 }
             }
-            showToast('Note resolved.');
-        } catch (e) {
-            console.error('Resolve failed:', e);
-            showToast('Could not resolve — permission denied or network error.');
-            // Revert UI if it fails
-            const fresh = state.docs.find(d => d.id === state.docId);
-            if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
         }
-    }
 
-    window.toggleCommentsPanel = () => {
-        els.commentsPanel.classList.toggle('hidden');
-        els.commentsBtn.classList.toggle('text-accent');
-    };
-
-        // New code added above
         
         
         // Optimistic UI update
