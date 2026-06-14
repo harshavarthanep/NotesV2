@@ -54,7 +54,8 @@
             --bg-color: #121212; --surface-color: #1e1e1e; --text-color: #e5e7eb; --border-color: #374151;
             --paper-bg: #1e1e1e; --paper-text: #e0e0e0; --toolbar-bg: #2a2a2a; --toolbar-border: #404040;
         }
-        body, div, button, input, select { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+        /* NOTE: 'input' intentionally excluded — transitions on inputs cause focus-steal reflow bugs */
+        body, div, button, select { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; } }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -140,13 +141,16 @@
         html.dark .ql-picker-item.ql-selected { color:#1a73e8 !important; font-weight:bold; }
 
         /* RULER */
-        #ruler { width:794px; height:22px; margin:0 auto 4px auto; position:relative; user-select:none; }
-        #ruler .track { position:absolute; top:7px; left:0; right:0; height:8px; background:linear-gradient(to right,#cfd4da 0,#cfd4da 96px,#fff 96px,#fff calc(100% - 96px),#cfd4da calc(100% - 96px),#cfd4da 100%); border:1px solid #c4c9cf; border-radius:2px; }
-        html.dark #ruler .track { background:#3a3a3a; border-color:#4b5563; }
-        #ruler .mtrack { position:absolute; top:7px; height:8px; background:#b9c0c8; }
-        html.dark #ruler .mtrack { background:#4b5563; }
-        #ruler .handle { position:absolute; top:0; width:14px; height:22px; cursor:ew-resize; z-index:3; }
-        #ruler .handle svg { display:block; }
+        #ruler-wrap { width:794px; margin:0 auto 2px auto; position:relative; user-select:none; display:flex; flex-direction:column; }
+        #ruler { height:28px; position:relative; background:var(--surface-color); border:1px solid var(--border-color); border-radius:3px; overflow:hidden; }
+        #ruler .ruler-bg { position:absolute; inset:0; pointer-events:none; }
+        #ruler .margin-zone { position:absolute; top:0; bottom:0; background:rgba(0,0,0,0.06); pointer-events:none; }
+        html.dark #ruler .margin-zone { background:rgba(255,255,255,0.06); }
+        #ruler .handle { position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; z-index:4; display:flex; align-items:flex-end; justify-content:center; padding-bottom:2px; }
+        #ruler .handle::after { content:''; display:block; width:2px; height:14px; background:#1a73e8; border-radius:1px; }
+        #ruler .handle:hover::after { background:#0d5cc7; height:18px; }
+        #ruler-reset { font-size:9px; color:var(--text-color); opacity:0.4; cursor:pointer; text-align:right; padding:0 2px 1px 0; line-height:1; }
+        #ruler-reset:hover { opacity:0.8; color:#1a73e8; }
 
         /* COMMENTS PANEL */
         #comments-panel { width:300px; flex-shrink:0; border-left:1px solid var(--border-color); background:var(--surface-color); display:flex; flex-direction:column; }
@@ -358,9 +362,16 @@
                             Apps
                         </a>
                     </div>
-                    <div class="flex items-center justify-between mb-2 px-1">
-                        <span id="user-email" class="text-[11px] text-gray-400 font-medium truncate max-w-[120px]"></span>
-                        <button id="logout-btn" title="Sign out" class="text-[10px] text-red-400 hover:text-red-300 transition font-bold bg-red-900/10 hover:bg-red-900/30 px-2 py-0.5 rounded border border-transparent hover:border-red-900/50 active:scale-95">Sign Out</button>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <div class="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
+                                <svg class="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            </div>
+                            <span id="user-email" class="text-[10px] text-gray-400 font-medium truncate min-w-0" title=""></span>
+                        </div>
+                        <button id="logout-btn" title="Sign out" class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-red-400 hover:bg-red-900/20 transition active:scale-90">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
+                        </button>
                     </div>
                     <div class="text-[9px] text-gray-600 text-center border-t border-gray-800 pt-2 cursor-default select-none">Made with love ❤️ by <span class="text-gray-500">Harsha Varthan E P</span></div>
                 </div>
@@ -380,13 +391,10 @@
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h16"/></svg>
                         </button>
                         <div class="flex flex-col w-full min-w-0">
-                            <!-- FIX: title is always enabled when a doc is open; pointer-events managed via JS -->
+                            <!-- Title: handlers attached in JS to avoid inline-handler focus conflicts -->
                             <input type="text" id="doc-title"
-                                onfocus="this.select()"
-                                onblur="handleTitleBlur()"
-                                onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
-                                class="bg-transparent text-lg font-semibold text-text outline-none w-full placeholder-gray-400 truncate transition-colors duration-300 min-w-0 cursor-text"
-                                placeholder="Untitled Document" disabled>
+                                class="bg-transparent text-lg font-semibold text-text outline-none w-full placeholder-gray-400 truncate min-w-0 cursor-text"
+                                placeholder="Untitled Document" disabled autocomplete="off" spellcheck="false">
                             <span class="text-[10px] text-muted font-medium h-3 truncate flex items-center gap-2"><span id="save-status"></span><span id="word-count" class="text-gray-400"></span></span>
                         </div>
                     </div>
@@ -527,7 +535,10 @@
                     </span>
                 </div>
 
-                <div id="ruler" class="hidden md:block"></div>
+                <div id="ruler-wrap" class="hidden md:block">
+                    <div id="ruler"></div>
+                    <div id="ruler-reset" onclick="resetMargins()" title="Reset margins to default">↺ Reset margins</div>
+                </div>
 
                 <div class="flex-1 flex min-h-0">
                     <div id="editor-wrapper" class="opacity-50 pointer-events-none transition-opacity duration-500">
@@ -563,11 +574,11 @@
     ============================================================ */
     const firebaseConfig = {
         apiKey: "AIzaSyCFmwO9aa5RZgOwQ5b3tN8NPha_1UfrCjA",
-        authDomain: "notes-b4daa.firebaseapp.com",
-        projectId: "notes-b4daa",
-        storageBucket: "notes-b4daa.firebasestorage.app",
-        messagingSenderId: "372433592521",
-        appId: "1:372433592521:web:348b2558084299be1a6d18"
+          authDomain: "notes-b4daa.firebaseapp.com",
+          projectId: "notes-b4daa",
+          storageBucket: "notes-b4daa.firebasestorage.app",
+          messagingSenderId: "372433592521",
+          appId: "1:372433592521:web:348b2558084299be1a6d18"
     };
     try { firebase.initializeApp(firebaseConfig); } catch(e) { console.error(e); }
     const auth = firebase.auth();
@@ -651,7 +662,15 @@
         localStorage.setItem('theme', isDark ? 'dark' : 'light');
         applyTheme(isDark);
         if (state.user) db.collection('users').doc(state.user.uid).set({ settings: { theme: isDark ? 'dark' : 'light' } }, { merge: true });
-        if (state.docId && !state.isGuest) triggerSave();
+        // Only sync to shared doc if sharing is active (theme is part of shared doc, not content save)
+        if (state.docId && !state.isGuest) {
+            const active = state.docs.find(d => d.id === state.docId);
+            if (active && active.shareId) {
+                db.collection('shared_docs').doc(active.shareId).set({ theme: isDark ? 'dark' : 'light' }, { merge: true }).catch(e => console.warn(e));
+            }
+        }
+        // Rebuild ruler to use correct tick colors
+        if (state.docId) buildRuler();
     }
 
     /* ============================================================
@@ -749,19 +768,18 @@
         }
     });
 
-    /* FIX: When cursor moves to position right after a comment span, 
-       explicitly remove comment format so new typing isn't highlighted */
+    /* FIX: When cursor moves after a comment span, strip the leaked format.
+       BUT: never steal focus from the title input or comment textarea. */
     quill.on('selection-change', function(range, oldRange, source) {
+        // If comment modal is open or title is focused, do NOT process selection changes
+        const commentModalOpen = els.commentModal.style.display !== 'none';
+        const titleFocused = document.activeElement === els.title;
+        if (commentModalOpen || titleFocused) return;
+
         if (range && range.length === 0) {
-            // Check format at cursor vs format just before cursor
             const fmtAtCursor = quill.getFormat(range.index, 0);
             if (fmtAtCursor.comment) {
-                // Only remove if we're not inside an existing comment span
-                const span = document.querySelector('.ql-comment.active-comment');
-                if (!span) {
-                    // Cursor is at boundary edge of a comment - clear the format leak
-                    quill.format('comment', false, 'silent');
-                }
+                quill.format('comment', false, 'silent');
             }
         }
         updateSizeInput(range);
@@ -894,22 +912,51 @@
     }, true);
 
     /* ============================================================
-       TITLE HANDLING — FIX cursor & edit issues
+       TITLE HANDLING
+       All handlers attached via JS — no inline handlers that fight focus flow.
+       Key insight: never call quill.focus() or editor focus from title handlers.
     ============================================================ */
-    function handleTitleBlur() {
-        if (!state.docId || state.isGuest) return;
-        const newTitle = els.title.value.trim() || 'Untitled Document';
-        // Duplicate title check
-        const isDuplicate = state.docs.some(d => d.id !== state.docId && (d.title || '').trim().toLowerCase() === newTitle.toLowerCase());
-        if (isDuplicate) {
-            showToast('A document with this name already exists.');
-            // Revert to old title
-            const current = state.docs.find(d => d.id === state.docId);
-            if (current) els.title.value = current.title || 'Untitled Document';
-            return;
-        }
-        triggerSave();
-    }
+    (function setupTitleHandlers() {
+        const titleEl = els.title;
+
+        // Select all text when focused
+        titleEl.addEventListener('focus', () => {
+            setTimeout(() => titleEl.select(), 10);
+        });
+
+        // Enter key moves to editor
+        titleEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                titleEl.blur();
+                // Don't force quill focus — user can click editor themselves
+            }
+        });
+
+        // On blur: validate + save (no confirm dialogs that steal focus)
+        titleEl.addEventListener('blur', () => {
+            if (!state.docId || state.isGuest) return;
+            const newTitle = titleEl.value.trim() || 'Untitled Document';
+            if (titleEl.value.trim() === '') titleEl.value = 'Untitled Document';
+            // Duplicate check
+            const isDuplicate = state.docs.some(d =>
+                d.id !== state.docId &&
+                (d.title || '').trim().toLowerCase() === newTitle.toLowerCase()
+            );
+            if (isDuplicate) {
+                showToast('A document with this name already exists.');
+                const current = state.docs.find(d => d.id === state.docId);
+                if (current) titleEl.value = current.title || 'Untitled Document';
+                return;
+            }
+            triggerSave();
+        });
+
+        // Live input — just trigger save after debounce
+        titleEl.addEventListener('input', () => {
+            if (state.docId && !state.isGuest) triggerSave();
+        });
+    })();
 
     /* ============================================================
        ROUTING / AUTH
@@ -944,7 +991,8 @@
                 els.loggedInControls.classList.add('hidden'); els.sidebar.classList.add('hidden');
                 els.hamburgerBtn.classList.add('hidden');
                 els.guestDownloadBtn.classList.remove('hidden'); els.guestCommentsBtn.classList.remove('hidden');
-                els.previewBanner.classList.remove('hidden'); els.toolbar.classList.add('hidden'); els.ruler.classList.add('hidden');
+                els.previewBanner.classList.remove('hidden'); els.toolbar.classList.add('hidden');
+                const rw = document.getElementById('ruler-wrap'); if (rw) rw.classList.add('hidden');
                 els.title.value = data.t;
                 const range = quill.getSelection(); quill.setContents(data.c); if (range) quill.setSelection(range);
                 quill.disable(); els.title.disabled = true;
@@ -966,7 +1014,9 @@
         state.user = u;
         if (u) {
             state.isGuest = false; if (state.guestUnsubscribe) state.guestUnsubscribe();
-            els.userEmail.textContent = u.email; els.authScreen.classList.add('hidden'); els.previewBanner.classList.add('hidden');
+            els.userEmail.textContent = u.email;
+            els.userEmail.title = u.email; // tooltip shows full email on hover
+            els.authScreen.classList.add('hidden'); els.previewBanner.classList.add('hidden');
             els.dashboard.classList.remove('hidden', 'opacity-0'); els.loggedInControls.classList.remove('hidden');
             els.sidebar.classList.remove('hidden'); els.hamburgerBtn.classList.remove('hidden');
             els.guestDownloadBtn.classList.add('hidden'); els.guestCommentsBtn.classList.add('hidden');
@@ -1128,6 +1178,9 @@
     }
 
     function startFolderRename(folderId, currentName, emoji, nameSpan) {
+        // Prevent double-invocation if already renaming
+        if (document.querySelector('.folder-rename-input')) return;
+
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'folder-rename-input';
@@ -1136,27 +1189,41 @@
         input.focus();
         input.select();
 
-        const commit = async () => {
-            const newName = input.value.trim();
-            if (!newName || newName === currentName) {
-                input.replaceWith(nameSpan);
-                return;
-            }
-            const confirmed = confirm(`Rename "${currentName}" to "${newName}"?`);
-            if (!confirmed) { input.replaceWith(nameSpan); return; }
-            try {
-                await db.collection('users').doc(state.user.uid).collection('folders').doc(folderId).update({ name: newName });
-                showToast(`Folder renamed to "${newName}"`);
-            } catch (e) {
-                console.error(e); showToast('Rename failed.'); input.replaceWith(nameSpan);
-            }
+        let committed = false;
+
+        const doCancel = () => {
+            if (committed) return;
+            committed = true;
+            try { input.replaceWith(nameSpan); } catch (e) {}
         };
 
-        input.addEventListener('blur', commit);
+        const doCommit = () => {
+            if (committed) return;
+            committed = true;
+            const newName = input.value.trim();
+            if (!newName || newName === currentName) {
+                try { input.replaceWith(nameSpan); } catch (e) {}
+                return;
+            }
+            // Defer confirm so blur event fully completes first — prevents double-firing
+            setTimeout(async () => {
+                const confirmed = window.confirm(`Rename "${currentName}" to "${newName}"?`);
+                if (!confirmed) return; // Firestore not changed; Firestore snapshot will re-render correctly
+                try {
+                    await db.collection('users').doc(state.user.uid).collection('folders')
+                        .doc(folderId).update({ name: newName });
+                    showToast(`Renamed to "${newName}"`);
+                } catch (e) {
+                    console.error(e); showToast('Rename failed.');
+                }
+            }, 0);
+        };
+
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-            if (e.key === 'Escape') { input.replaceWith(nameSpan); }
+            if (e.key === 'Enter') { e.preventDefault(); doCommit(); }
+            if (e.key === 'Escape') { e.preventDefault(); doCancel(); }
         });
+        input.addEventListener('blur', doCommit);
     }
 
     function updateFolderSelect() {
@@ -1287,27 +1354,65 @@
     }
 
     /* ============================================================
-       MARGINS / RULER
+       MARGINS / RULER — with cm tick marks and reset
     ============================================================ */
     function applyMargins() {
         const ed = document.querySelector('.ql-editor');
         if (ed) { ed.style.paddingLeft = state.marginL + 'px'; ed.style.paddingRight = state.marginR + 'px'; }
         buildRuler();
     }
-    function buildRuler() {
-        const W = 794;
-        els.ruler.innerHTML = `<div class="track"></div>
-            <div class="mtrack" style="left:0;width:${state.marginL}px;"></div>
-            <div class="mtrack" style="right:0;width:${state.marginR}px;"></div>
-            <div class="handle" id="hL" style="left:${state.marginL - 7}px;" title="Left margin"><svg width="14" height="22"><polygon points="0,0 14,0 7,8" fill="#5f6368"/></svg></div>
-            <div class="handle" id="hR" style="left:${W - state.marginR - 7}px;" title="Right margin"><svg width="14" height="22"><polygon points="0,0 14,0 7,8" fill="#5f6368"/></svg></div>`;
-        initRulerDrag('hL', true); initRulerDrag('hR', false);
+
+    function resetMargins() {
+        state.marginL = 96; state.marginR = 96;
+        applyMargins();
+        if (state.docId && !state.isGuest) triggerSave();
+        showToast('Margins reset to default');
     }
+    window.resetMargins = resetMargins;
+
+    function buildRuler() {
+        const rulerEl = document.getElementById('ruler');
+        if (!rulerEl) return;
+        const W = 794; // paper width px
+        const DPI = 96; // screen DPI assumption
+        const CM_TO_PX = DPI / 2.54; // ~37.8px per cm
+
+        let html = '';
+        // Margin zones
+        html += `<div class="margin-zone" style="left:0;width:${state.marginL}px;"></div>`;
+        html += `<div class="margin-zone" style="right:0;width:${state.marginR}px;"></div>`;
+
+        // Tick marks canvas-style via absolute divs
+        // Draw ticks every 0.5cm, labels every 1cm
+        const totalCm = W / CM_TO_PX;
+        for (let cm = 0; cm <= totalCm; cm += 0.5) {
+            const x = Math.round(cm * CM_TO_PX);
+            const isMajor = (cm % 1 === 0);
+            const isHalf = !isMajor;
+            const tickH = isMajor ? 10 : 6;
+            const col = document.documentElement.classList.contains('dark') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
+            html += `<div style="position:absolute;left:${x}px;bottom:0;width:1px;height:${tickH}px;background:${col};pointer-events:none;"></div>`;
+            if (isMajor && cm > 0 && x < W - 10) {
+                const labelCol = document.documentElement.classList.contains('dark') ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.45)';
+                html += `<div style="position:absolute;left:${x + 2}px;bottom:10px;font-size:8px;color:${labelCol};pointer-events:none;line-height:1;">${cm}</div>`;
+            }
+        }
+
+        // Handles
+        html += `<div class="handle" id="hL" style="left:${state.marginL - 5}px;" title="Drag to set left margin"></div>`;
+        html += `<div class="handle" id="hR" style="left:${W - state.marginR - 5}px;" title="Drag to set right margin"></div>`;
+
+        rulerEl.innerHTML = html;
+        initRulerDrag('hL', true);
+        initRulerDrag('hR', false);
+    }
+
     function initRulerDrag(id, isLeft) {
         const h = document.getElementById(id); if (!h) return;
         const start = (e) => {
             e.preventDefault();
-            const rulerRect = els.ruler.getBoundingClientRect();
+            const rulerEl = document.getElementById('ruler');
+            const rulerRect = rulerEl.getBoundingClientRect();
             const move = (ev) => {
                 const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rulerRect.left;
                 let px = Math.round(cx);
@@ -1333,10 +1438,12 @@
         state.docId = id; state.isFav = data.isFavorite || false;
         if (state.importedUnsubscribe) { state.importedUnsubscribe(); state.importedUnsubscribe = null; }
 
-        els.title.value = data.title;
-        els.title.disabled = false; // Always enable when a doc is open
+        els.title.value = data.title || '';
+        els.title.disabled = false;
         els.editorWrapper.classList.remove('opacity-50', 'pointer-events-none');
-        els.toolbar.classList.remove('hidden'); els.ruler.classList.remove('hidden');
+        els.toolbar.classList.remove('hidden');
+        const rw = document.getElementById('ruler-wrap');
+        if (rw) rw.classList.remove('hidden');
         els.favBtn.disabled = false; els.delBtn.disabled = false; els.downBtn.disabled = false;
         els.dupBtn.disabled = false; els.commentsBtn.disabled = false;
         els.shareBtn.disabled = false; els.folderSelect.disabled = false;
@@ -1345,7 +1452,7 @@
         state.marginL = data.marginL || 96; state.marginR = data.marginR || 96;
         state.comments = data.comments || {};
         updateFavIcon();
-        quill.setContents(data.content, 'api'); quill.enable();
+        quill.setContents(data.content || '', 'api'); quill.enable();
         applyMargins(); renderComments();
         els.status.textContent = 'Synced'; updateWordCount();
 
@@ -1357,7 +1464,8 @@
                     const cur = JSON.stringify(quill.getContents()); const inc = JSON.stringify(p.c);
                     if (cur !== inc) {
                         const r = quill.getSelection(); quill.setContents(p.c, 'silent');
-                        els.title.value = p.t; if (r) quill.setSelection(r); updateWordCount();
+                        if (document.activeElement !== els.title) els.title.value = p.t;
+                        if (r) quill.setSelection(r); updateWordCount();
                         state.comments = p.comments || {}; renderComments();
                         db.collection('users').doc(state.user.uid).collection('docs').doc(id).update({
                             title: p.t, content: p.c, comments: p.comments || {},
@@ -1478,66 +1586,81 @@
        Rules:
        - Guests: view only, NO adding notes
        - Owner: can add and delete ANY note
-       - Shared-receiver (importedFromShareId set): can add own notes, delete only own notes
+       - Shared-receiver: can add own notes, delete only own notes
     ============================================================ */
+
+    // Store the selection when user initiates a comment (before quill loses focus)
+    let _pendingCommentRange = null;
+
     function startComment() {
         if (state.isGuest) {
             showToast('Sign in to add notes.');
             return;
         }
+        // Capture selection NOW before anything else changes it
         const range = quill.getSelection();
         if (!range || range.length === 0) {
-            showToast('Select some text first, then add your note.');
+            showToast('Select some text in the document first, then tap the note button.');
             return;
         }
-        els.commentQuote.textContent = '"' + quill.getText(range.index, range.length).slice(0, 120) + '"';
-        els.commentModal.dataset.idx = range.index;
-        els.commentModal.dataset.len = range.length;
+        _pendingCommentRange = { index: range.index, length: range.length };
+        const quote = quill.getText(range.index, range.length).slice(0, 120);
+
+        els.commentQuote.textContent = '"' + quote + '"';
         els.commentModal.dataset.quote = quill.getText(range.index, range.length).slice(0, 200);
         els.commentText.value = '';
+
+        // Show modal
         els.commentModal.style.display = 'flex';
-        // FIX: Use setTimeout to ensure modal is visible before focusing
-        setTimeout(() => {
-            els.commentText.focus();
-            // On iOS, force keyboard up
-            els.commentText.click();
-        }, 100);
+
+        // FIX: quill steals focus via selection-change after modal opens.
+        // We must defer focus until after all quill events have fired.
+        // Using two rAF + setTimeout chain ensures we're past the event loop.
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    els.commentText.focus();
+                    // Restore the cursor to textarea in case it lost it
+                    if (document.activeElement !== els.commentText) {
+                        els.commentText.focus();
+                    }
+                }, 80);
+            });
+        });
     }
 
     window.closeCommentModal = () => {
         els.commentModal.style.display = 'none';
         els.commentText.value = '';
+        _pendingCommentRange = null;
     };
 
     window.submitComment = async () => {
         const text = els.commentText.value.trim();
-        if (!text) { showToast('Please write a note first.'); return; }
+        if (!text) { showToast('Please write a note first.'); els.commentText.focus(); return; }
         if (state.isGuest) { showToast('Sign in to add notes.'); return; }
 
-        const idx = parseInt(els.commentModal.dataset.idx, 10);
-        const len = parseInt(els.commentModal.dataset.len, 10);
-        const quote = els.commentModal.dataset.quote || quill.getText(idx, len).slice(0, 200);
+        if (!_pendingCommentRange) {
+            showToast('Lost text selection — please select text again and retry.');
+            closeCommentModal(); return;
+        }
+        const { index: idx, length: len } = _pendingCommentRange;
+        const quote = els.commentModal.dataset.quote || '';
         const cid = 'c' + Date.now() + Math.floor(Math.random() * 9999);
         const author = state.user.email;
         const authorUid = state.user.uid;
 
-        // Is this an owner or a shared-receiver?
         const activeDoc = state.docs.find(d => d.id === state.docId);
         const isSharedReceiver = activeDoc && activeDoc.importedFromShareId;
-
         const comment = { quote, text, author, authorUid, ts: Date.now() };
 
         if (isSharedReceiver) {
-            // Save comment to the shared_doc (so owner sees it) AND local doc
             try {
-                const updateObj = {};
-                updateObj['comments.' + cid] = comment;
                 await db.collection('shared_docs').doc(activeDoc.importedFromShareId).set(
                     { comments: { [cid]: comment } }, { merge: true }
                 );
             } catch (e) { console.warn('Could not save to shared doc', e); }
         } else {
-            // Owner: apply highlight in editor
             quill.formatText(idx, len, 'comment', cid);
         }
 
