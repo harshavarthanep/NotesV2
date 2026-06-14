@@ -1766,97 +1766,23 @@
         setTimeout(() => jumpToComment(cid), 100);
     }
 
-    // async function deleteComment(cid) {
-    //     if (!confirm('Resolve and remove this note?')) return;
-
-    //     const activeDoc = state.docs.find(d => d.id === state.docId);
-    //     const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
-
-    //     // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
-    //     if (!isSharedReceiver) {
-    //         const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
-    //         if (span) {
-    //             const blot = Quill.find(span);
-    //             if (blot) {
-    //                 const i = quill.getIndex(blot);
-    //                 quill.formatText(i, span.textContent.length, 'comment', false);
-    //             }
-    //         }
-    //     }
-
-            async function deleteComment(cid) {
+    async function deleteComment(cid) {
         if (!confirm('Resolve and remove this note?')) return;
 
         const activeDoc = state.docs.find(d => d.id === state.docId);
         const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
 
-        // 1. Mathematically locate and remove the highlight (bypasses complex DOM bugs)
+        // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
         if (!isSharedReceiver) {
-            const delta = quill.getContents();
-            let currIndex = 0;
-            const ranges = [];
-            
-            // Find every chunk that has this specific comment ID attached
-            delta.ops.forEach(op => {
-                const len = typeof op.insert === 'string' ? op.insert.length : 1;
-                if (op.attributes && op.attributes.comment === cid) {
-                    ranges.push({ index: currIndex, length: len });
-                }
-                currIndex += len;
-            });
-
-            // Strip format backwards to prevent index shifting
-            for (let i = ranges.length - 1; i >= 0; i--) {
-                quill.formatText(ranges[i].index, ranges[i].length, 'comment', false, 'silent');
-            }
-            
-            // CRITICAL: Force the app to recognize this as an active edit! 
-            // This stops Firebase from instantly reverting the text before the save completes.
-            state.lastTypeTime = Date.now();
-        }
-
-        // Optimistic UI update for the sidebar
-        delete state.comments[cid];
-        renderComments();
-
-        // 2. Prepare the atomic delete for the database
-        const fieldPath = 'comments.' + cid;
-        const atomicUpdate = { [fieldPath]: firebase.firestore.FieldValue.delete() };
-
-        try {
-            if (isSharedReceiver) {
-                await db.collection('shared_docs').doc(activeDoc.importedFromShareId).update(atomicUpdate);
-                await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update(atomicUpdate);
-            } else {
-                // CRITICAL: Bundle the perfectly clean text into the EXACT SAME database call
-                atomicUpdate['content'] = JSON.parse(JSON.stringify(quill.getContents()));
-                atomicUpdate['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
-
-                await db.collection('users').doc(state.user.uid)
-                    .collection('docs').doc(state.docId)
-                    .update(atomicUpdate);
-
-                if (activeDoc && activeDoc.shareId) {
-                    await db.collection('shared_docs')
-                        .doc(activeDoc.shareId)
-                        .update({
-                            [fieldPath]: firebase.firestore.FieldValue.delete(),
-                            'c': atomicUpdate['content'],
-                            'theme': localStorage.getItem('theme') || 'light'
-                        });
+            const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
+            if (span) {
+                const blot = Quill.find(span);
+                if (blot) {
+                    const i = quill.getIndex(blot);
+                    quill.formatText(i, span.textContent.length, 'comment', false);
                 }
             }
-            showToast('Note resolved.');
-        } catch (e) {
-            console.error('Resolve failed:', e);
-            showToast('Could not resolve — permission denied or network error.');
-            // Revert UI if the network fails
-            const fresh = state.docs.find(d => d.id === state.docId);
-            if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
         }
-    }
-
-// New Code for notes mentioned above
         
         // Optimistic UI update
         delete state.comments[cid];
