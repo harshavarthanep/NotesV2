@@ -1532,20 +1532,54 @@
         try {
             const currentContent = JSON.parse(JSON.stringify(quill.getContents()));
             const titleVal = els.title.value.trim() || 'Untitled';
-            const updateData = {
-                title: titleVal, content: currentContent, isFavorite: state.isFav,
-                folderId: els.folderSelect.value || null, comments: state.comments || {},
-                marginL: state.marginL, marginR: state.marginR,
+
+            // Build a flat dot-notation update object for the user's own doc.
+            // We write content/title/etc. directly, and each comment entry
+            // as its own dot-path so Firestore sees individual key changes.
+            // This keeps the security rules diff clean for comment-only writes.
+            const userDocUpdate = {
+                title: titleVal,
+                content: currentContent,
+                isFavorite: state.isFav,
+                folderId: els.folderSelect.value || null,
+                marginL: state.marginL,
+                marginR: state.marginR,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
-            await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).set(updateData, { merge: true });
+            // Write each comment as a separate dot-notation field so that
+            // adding/removing one comment only shows that key in affectedKeys()
+            const comments = state.comments || {};
+            Object.keys(comments).forEach(cid => {
+                userDocUpdate['comments.' + cid] = comments[cid];
+            });
+
+            // Use update() (not set+merge) so we don't accidentally wipe fields
+            // Note: first-time save on a new doc may need set — handle both
+            const userRef = db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId);
+            try {
+                await userRef.update(userDocUpdate);
+            } catch (e) {
+                // update() fails if doc doesn't exist yet — fall back to set
+                if (e.code === 'not-found') {
+                    await userRef.set({ ...userDocUpdate, comments: comments, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+                } else { throw e; }
+            }
+
+            // Sync to shared_doc if this doc is shared — owner-only write, no field restriction
             const active = state.docs.find(d => d.id === state.docId);
             if (active && active.shareId) {
-                await db.collection('shared_docs').doc(active.shareId).set({
-                    t: updateData.title, c: updateData.content, comments: updateData.comments,
+                const sharedUpdate = {
+                    t: titleVal,
+                    c: currentContent,
                     theme: localStorage.getItem('theme') || 'light'
-                }, { merge: true });
+                };
+                // Write each comment individually here too for consistency
+                Object.keys(comments).forEach(cid => {
+                    sharedUpdate['comments.' + cid] = comments[cid];
+                });
+                await db.collection('shared_docs').doc(active.shareId).update(sharedUpdate);
             }
+
             els.status.textContent = 'Saved';
         } catch (e) { console.error(e); els.status.textContent = 'Error saving'; }
     }
@@ -1732,32 +1766,68 @@
         setTimeout(() => jumpToComment(cid), 100);
     }
 
-    function deleteComment(cid) {
+    async function deleteComment(cid) {
         if (!confirm('Resolve and remove this note?')) return;
-        // Remove highlight from editor if present
-        const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
-        if (span) {
-            const blot = Quill.find(span);
-            if (blot) {
-                const i = quill.getIndex(blot);
-                quill.formatText(i, span.textContent.length, 'comment', false);
+
+        const activeDoc = state.docs.find(d => d.id === state.docId);
+        const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
+
+        // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
+        if (!isSharedReceiver) {
+            const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
+            if (span) {
+                const blot = Quill.find(span);
+                if (blot) {
+                    const i = quill.getIndex(blot);
+                    quill.formatText(i, span.textContent.length, 'comment', false);
+                }
             }
         }
+
+        // Optimistic UI update
         delete state.comments[cid];
-
-        // Also remove from shared doc if applicable
-        const activeDoc = state.docs.find(d => d.id === state.docId);
-        if (activeDoc && activeDoc.importedFromShareId) {
-            try {
-                const upd = {};
-                upd['comments.' + cid] = firebase.firestore.FieldValue.delete();
-                db.collection('shared_docs').doc(activeDoc.importedFromShareId).update(upd).catch(e => console.warn(e));
-            } catch (e) { console.warn(e); }
-        }
-
-        triggerSave();
         renderComments();
-        showToast('Note resolved.');
+
+        // Use dot-notation FieldValue.delete() so Firestore rules diff sees
+        // ONLY the single 'comments.XYZ' key changing — not the whole document.
+        // This is critical: set(merge:true) with a full comments map causes
+        // all comment keys to appear "changed" in affectedKeys(), which breaks
+        // the per-user permission check in the rules.
+        const fieldPath = 'comments.' + cid;
+        const atomicDelete = { [fieldPath]: firebase.firestore.FieldValue.delete() };
+
+        try {
+            if (isSharedReceiver) {
+                // Receiver path: update shared_doc only (rules enforce authorUid check)
+                await db.collection('shared_docs')
+                    .doc(activeDoc.importedFromShareId)
+                    .update(atomicDelete);
+                // Mirror deletion in their local copy
+                await db.collection('users').doc(state.user.uid)
+                    .collection('docs').doc(state.docId)
+                    .update(atomicDelete);
+            } else {
+                // Owner path: update own doc
+                await db.collection('users').doc(state.user.uid)
+                    .collection('docs').doc(state.docId)
+                    .update(atomicDelete);
+                // If shared, mirror deletion in shared_doc (owner rule, no field restriction)
+                if (activeDoc && activeDoc.shareId) {
+                    await db.collection('shared_docs')
+                        .doc(activeDoc.shareId)
+                        .update(atomicDelete);
+                }
+                // Save editor content (highlight removed above)
+                triggerSave();
+            }
+            showToast('Note resolved.');
+        } catch (e) {
+            console.error('Resolve failed:', e);
+            showToast('Could not resolve — permission denied or network error.');
+            // Revert optimistic update from most recent Firestore snapshot
+            const fresh = state.docs.find(d => d.id === state.docId);
+            if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
+        }
     }
 
     window.toggleCommentsPanel = () => {
