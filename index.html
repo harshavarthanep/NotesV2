@@ -54,7 +54,6 @@
             --bg-color: #121212; --surface-color: #1e1e1e; --text-color: #e5e7eb; --border-color: #374151;
             --paper-bg: #1e1e1e; --paper-text: #e0e0e0; --toolbar-bg: #2a2a2a; --toolbar-border: #404040;
         }
-        /* NOTE: 'input' intentionally excluded — transitions on inputs cause focus-steal reflow bugs */
         body, div, button, select { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; } }
 
@@ -84,11 +83,10 @@
         html.dark #paper-container { box-shadow:0 4px 30px rgba(0,0,0,0.5); border:1px solid #333; }
         .ql-container { font-size:11pt; font-family:'Times New Roman', serif; height:auto !important; border:none !important; }
         .ql-editor { padding:96px var(--editor-pad) 96px var(--editor-pad); min-height:1123px; height:auto !important; overflow-y:visible !important; line-height:1.6; }
-        /* CRITICAL: prevent comment format from leaking into adjacent text */
         .ql-editor .ql-comment { background:rgba(251,188,4,.28); border-bottom:2px solid #fbbc04; cursor:pointer; border-radius:2px; display:inline; }
         .ql-editor .ql-comment.active-comment { background:rgba(251,188,4,.55); }
 
-        /* TOOLBAR — always visible, centered like Google Docs */
+        /* TOOLBAR */
         #toolbar.ql-toolbar {
             border:none !important; background:var(--toolbar-bg); border-bottom:1px solid var(--toolbar-border) !important;
             padding:6px 14px !important; border-radius:30px; margin:8px auto; max-width:max-content;
@@ -140,8 +138,8 @@
         html.dark .ql-picker-item:hover { color:#1a73e8 !important; background-color:#383838; }
         html.dark .ql-picker-item.ql-selected { color:#1a73e8 !important; font-weight:bold; }
 
-        /* RULER */
-        #ruler-wrap { width:794px; margin:0 auto 2px auto; position:relative; user-select:none; display:flex; flex-direction:column; }
+        /* RULER — FIX: ruler-wrap matches paper width exactly */
+        #ruler-wrap { width:794px; margin:0 auto 0 auto; position:relative; user-select:none; display:flex; flex-direction:column; }
         #ruler { height:28px; position:relative; background:var(--surface-color); border:1px solid var(--border-color); border-radius:3px; overflow:hidden; }
         #ruler .ruler-bg { position:absolute; inset:0; pointer-events:none; }
         #ruler .margin-zone { position:absolute; top:0; bottom:0; background:rgba(0,0,0,0.06); pointer-events:none; }
@@ -149,7 +147,8 @@
         #ruler .handle { position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; z-index:4; display:flex; align-items:flex-end; justify-content:center; padding-bottom:2px; }
         #ruler .handle::after { content:''; display:block; width:2px; height:14px; background:#1a73e8; border-radius:1px; }
         #ruler .handle:hover::after { background:#0d5cc7; height:18px; }
-        #ruler-reset { font-size:9px; color:var(--text-color); opacity:0.4; cursor:pointer; text-align:right; padding:0 2px 1px 0; line-height:1; }
+        /* FIX: ruler-reset aligns flush with the right edge of the 794px paper */
+        #ruler-reset { font-size:9px; color:var(--text-color); opacity:0.4; cursor:pointer; text-align:right; padding:1px 0 2px 0; line-height:1; }
         #ruler-reset:hover { opacity:0.8; color:#1a73e8; }
 
         /* COMMENTS PANEL */
@@ -162,16 +161,46 @@
         .sidebar-open { transform: translateX(0); }
         .doc-enter { animation: fadeInUp 0.25s cubic-bezier(0.16,1,0.3,1) both; }
 
-        /* Info modal */
         #info-modal { z-index: 97; }
 
-        /* Folder rename inline */
         .folder-rename-input { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff; padding: 1px 6px; font-size: 0.875rem; outline: none; width: 130px; }
         html.dark .folder-rename-input { background: rgba(255,255,255,0.08); }
 
-        /* Toast notification */
         #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:#323232; color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; z-index:9999; opacity:0; transition:opacity 0.25s ease, transform 0.25s ease; pointer-events:none; white-space:nowrap; }
         #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+        /* FIX: Header title-area star button styling */
+        #header-fav-btn {
+            flex-shrink: 0;
+            width: 26px; height: 26px;
+            display: flex; align-items: center; justify-content: center;
+            border: none; background: transparent; cursor: pointer;
+            border-radius: 50%;
+            font-size: 16px; line-height: 1;
+            color: #d1d5db;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        #header-fav-btn:hover { background: rgba(0,0,0,0.07); }
+        html.dark #header-fav-btn:hover { background: rgba(255,255,255,0.1); }
+        #header-fav-btn.is-fav { color: #fbbc04; }
+        #header-fav-btn:disabled { opacity: 0.3; cursor: default; }
+        #header-fav-btn:disabled:hover { background: transparent; }
+
+        /* FIX: Header info button in title area */
+        #header-info-btn {
+            flex-shrink: 0;
+            width: 26px; height: 26px;
+            display: flex; align-items: center; justify-content: center;
+            border: none; background: transparent; cursor: pointer;
+            border-radius: 50%;
+            color: #9ca3af;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        #header-info-btn:hover { background: rgba(0,0,0,0.07); color: #1a73e8; }
+        html.dark #header-info-btn:hover { background: rgba(255,255,255,0.1); color: #8ab4f8; }
+        #header-info-btn:disabled { opacity: 0.3; cursor: default; }
+        #header-info-btn:disabled:hover { background: transparent; color: #9ca3af; }
+        #header-info-btn svg { width: 15px; height: 15px; }
 
         @media (max-width: 850px) {
             #editor-wrapper { padding:0; }
@@ -195,6 +224,8 @@
                 box-shadow:0 -4px 20px rgba(0,0,0,0.3) !important; border:1px solid var(--border-color); padding:10px !important;
             }
             .ql-picker-expanded .ql-picker-options { display:block; }
+            /* Hide header info/fav on mobile — they appear in mobile menu */
+            #header-fav-btn, #header-info-btn { display: none !important; }
         }
 
         @media print {
@@ -207,51 +238,25 @@
             @page { size:A4; margin:1in; }
         }
 
-        /* ── MOBILE TOOLBAR BOTTOM MODE ── */
-        /* Applied via body.toolbar-bottom class toggled by JS */
-        /* @media (max-width: 850px) {
+        @media (max-width: 850px) {
             body.toolbar-bottom #toolbar.ql-toolbar {
                 position: fixed !important;
-                bottom: 0 !important; left: 0 !important; right: 0 !important; top: auto !important;
+                bottom: var(--keyboard-offset, 0px) !important;
+                left: 0 !important; right: 0 !important; top: auto !important;
                 border-radius: 0 !important;
                 margin: 0 !important;
                 border-top: 1px solid var(--border-color) !important;
                 border-bottom: none !important;
-                z-index: 200 !important; */
-                /* Safe area for iPhone home bar */
-                /* padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; */
-            /* } */
-            /* Extra bottom padding on editor so content isn't hidden behind fixed toolbar */
-            /* body.toolbar-bottom .ql-editor { padding-bottom: 80px !important; }
-        } */
-
-        /* ── MOBILE TOOLBAR BOTTOM MODE ── */
-        /* Applied via body.toolbar-bottom class toggled by JS */
-            @media (max-width: 850px) {
-                body.toolbar-bottom #toolbar.ql-toolbar {
-                    position: fixed !important;
-                    /* Dynamically anchors above the keyboard using our JS variable, defaults to 0 */
-                    bottom: var(--keyboard-offset, 0px) !important; 
-                    left: 0 !important; right: 0 !important; top: auto !important;
-                    border-radius: 0 !important;
-                    margin: 0 !important;
-                    border-top: 1px solid var(--border-color) !important;
-                    border-bottom: none !important;
-                    /* Lowered from 200 to 50 so Sidebar (z-65) and Overlay (z-60) stay on top */
-                    z-index: 50 !important;
-                    /* Safe area for iPhone home bar */
-                    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-                    transition: bottom 0.1s ease-out;
-                }
-                /* Extra bottom padding on editor so content isn't hidden behind fixed toolbar */
-                body.toolbar-bottom .ql-editor { padding-bottom: 140px !important; }
+                z-index: 50 !important;
+                padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+                transition: bottom 0.1s ease-out;
             }
-        
+            body.toolbar-bottom .ql-editor { padding-bottom: 140px !important; }
+        }
     </style>
 </head>
 <body class="h-[100dvh] w-screen overflow-hidden flex flex-col font-sans text-text bg-bg transition-colors duration-300">
 
-    <!-- TOAST -->
     <div id="toast"></div>
 
     <div id="preview-banner" class="hidden bg-accent text-white px-4 py-2 text-sm flex justify-between items-center z-[70] shadow-md">
@@ -433,7 +438,7 @@
                         <button id="hamburger-btn" title="Menu" class="md:hidden text-muted p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full active:scale-90" onclick="toggleSidebar()">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                         </button>
-                        <!-- Mobile toolbar position toggle (top ↔ bottom) — hidden on desktop -->
+                        <!-- Mobile toolbar position toggle -->
                         <button id="toolbar-pos-btn" onclick="toggleToolbarPosition()" title="Move toolbar to top or bottom"
                             class="md:hidden p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-90" style="transition:transform .25s ease;">
                             <svg id="toolbar-pos-icon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -444,12 +449,23 @@
                         <button id="sidebar-toggle-desktop" title="Toggle sidebar" class="hidden md:flex p-2 -ml-2 text-muted hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full active:scale-90 transition" onclick="toggleDesktopSidebar()">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h16"/></svg>
                         </button>
-                        <div class="flex flex-col w-full min-w-0">
-                            <!-- Title: handlers attached in JS to avoid inline-handler focus conflicts -->
-                            <input type="text" id="doc-title"
-                                class="bg-transparent text-lg font-semibold text-text outline-none w-full placeholder-gray-400 truncate min-w-0 cursor-text"
-                                placeholder="Untitled Document" disabled autocomplete="off" spellcheck="false">
-                            <span class="text-[10px] text-muted font-medium h-3 truncate flex items-center gap-2"><span id="save-status"></span><span id="word-count" class="text-gray-400"></span></span>
+
+                        <!-- Title + inline star + inline info (desktop only) -->
+                        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                            <div class="flex flex-col flex-1 min-w-0">
+                                <input type="text" id="doc-title"
+                                    class="bg-transparent text-lg font-semibold text-text outline-none w-full placeholder-gray-400 truncate min-w-0 cursor-text"
+                                    placeholder="Untitled Document" disabled autocomplete="off" spellcheck="false">
+                                <span class="text-[10px] text-muted font-medium h-3 truncate flex items-center gap-2"><span id="save-status"></span><span id="word-count" class="text-gray-400"></span></span>
+                            </div>
+                            <!-- FIX: Priority star in title area (desktop only) -->
+                            <button id="header-fav-btn" title="Mark as important" onclick="toggleFavorite()" disabled>★</button>
+                            <!-- FIX: Info icon in title area (desktop only) -->
+                            <button id="header-info-btn" title="File info" onclick="showCurrentDocInfo()" disabled>
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
 
@@ -461,14 +477,13 @@
                             <button id="comments-btn" onclick="toggleCommentsPanel()" title="Notes &amp; comments" class="hidden md:block p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-accent transition active:scale-90 disabled:opacity-50" disabled>
                                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z"/></svg>
                             </button>
-                            <button id="help-btn" onclick="openHelp()" title="Help &amp; guide" class="hidden md:block p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-accent transition active:scale-90">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            </button>
+                            <!-- FIX: help-btn in desktop header replaced with info icon → moved to title area above. Keep for mobile menu only. -->
                             <button id="theme-btn" onclick="toggleTheme()" title="Light / dark theme" class="hidden md:block p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-accent transition active:scale-90">
                                 <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707M12.728 6.343l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                                 <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
                             </button>
-                            <button id="fav-btn" onclick="toggleFavorite()" title="Mark important" class="hidden md:block p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gold transition disabled:opacity-50 active:scale-90" disabled>★</button>
+                            <!-- fav-btn hidden on desktop (moved to title area as header-fav-btn) -->
+                            <button id="fav-btn" onclick="toggleFavorite()" title="Mark important" class="hidden p-2 rounded-full text-muted hover:text-gold transition disabled:opacity-50 active:scale-90" disabled>★</button>
                             <button id="duplicate-btn" onclick="duplicateCurrentDoc()" title="Duplicate document" class="hidden md:block p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-accent transition disabled:opacity-50 active:scale-90" disabled>
                                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
                             </button>
@@ -483,6 +498,7 @@
                             <button id="m-folder-btn" onclick="toggleMobileFolderMenu()" title="Move to folder" class="md:hidden p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-90">
                                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
                             </button>
+                            <!-- Mobile fav button stays in mobile actions bar -->
                             <button id="m-fav-btn" onclick="toggleFavorite()" title="Mark important" class="md:hidden p-2 rounded-full text-muted hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-90 text-xl leading-none">★</button>
 
                             <div class="md:hidden relative mobile-menu-container">
@@ -495,7 +511,8 @@
                                     <button onclick="toggleCommentsPanel(); toggleMobileMenu()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3"><svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z"/></svg> Notes &amp; comments</button>
                                     <button onclick="openDownloadMenu(); toggleMobileMenu()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3"><svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download</button>
                                     <button onclick="duplicateCurrentDoc(); toggleMobileMenu()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3"><svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg> Duplicate</button>
-                                    <button onclick="openHelp(); toggleMobileMenu()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3"><svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Help &amp; guide</button>
+                                    <!-- FIX: mobile menu info icon (replaces help icon) -->
+                                    <button onclick="showCurrentDocInfo(); toggleMobileMenu()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3"><svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> File info</button>
                                     <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
                                     <button onclick="deleteCurrentDoc(); toggleMobileMenu()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3 text-danger"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Delete</button>
                                 </div>
@@ -589,7 +606,8 @@
                     </span>
                 </div>
 
-                <div id="ruler-wrap" class="hidden md:block">
+                <!-- FIX: ruler-wrap perfectly aligned to 794px paper -->
+                <div id="ruler-wrap" class="hidden md:flex flex-col" style="width:794px; margin:0 auto;">
                     <div id="ruler"></div>
                     <div id="ruler-reset" onclick="resetMargins()" title="Reset margins to default">↺ Reset margins</div>
                 </div>
@@ -649,7 +667,6 @@
         comments: {}, painter: null, painterArmed: false,
         marginL: 96, marginR: 96, suppressClickUntil: 0, lastToggle: 0,
         sidebarOpen: true,
-        // folder rename tracking
         folderTapTimers: {},
         folderTapCounts: {}
     };
@@ -667,6 +684,8 @@
         title: document.getElementById('doc-title'), editorWrapper: document.getElementById('editor-wrapper'),
         status: document.getElementById('save-status'), favBtn: document.getElementById('fav-btn'),
         mFavBtn: document.getElementById('m-fav-btn'),
+        headerFavBtn: document.getElementById('header-fav-btn'),
+        headerInfoBtn: document.getElementById('header-info-btn'),
         delBtn: document.getElementById('delete-btn'), downBtn: document.getElementById('download-btn'),
         dupBtn: document.getElementById('duplicate-btn'), commentsBtn: document.getElementById('comments-btn'),
         wordCount: document.getElementById('word-count'), toolbar: document.getElementById('toolbar'),
@@ -716,14 +735,12 @@
         localStorage.setItem('theme', isDark ? 'dark' : 'light');
         applyTheme(isDark);
         if (state.user) db.collection('users').doc(state.user.uid).set({ settings: { theme: isDark ? 'dark' : 'light' } }, { merge: true });
-        // Only sync to shared doc if sharing is active (theme is part of shared doc, not content save)
         if (state.docId && !state.isGuest) {
             const active = state.docs.find(d => d.id === state.docId);
             if (active && active.shareId) {
                 db.collection('shared_docs').doc(active.shareId).set({ theme: isDark ? 'dark' : 'light' }, { merge: true }).catch(e => console.warn(e));
             }
         }
-        // Rebuild ruler to use correct tick colors
         if (state.docId) buildRuler();
     }
 
@@ -733,19 +750,13 @@
     function toggleDesktopSidebar() {
         const sb = document.getElementById('sidebar');
         state.sidebarOpen = !state.sidebarOpen;
-        if (state.sidebarOpen) {
-            sb.classList.remove('collapsed');
-        } else {
-            sb.classList.add('collapsed');
-        }
+        if (state.sidebarOpen) { sb.classList.remove('collapsed'); }
+        else { sb.classList.add('collapsed'); }
         localStorage.setItem('sidebarOpen', state.sidebarOpen ? '1' : '0');
     }
     function initDesktopSidebar() {
         const saved = localStorage.getItem('sidebarOpen');
-        if (saved === '0') {
-            state.sidebarOpen = false;
-            document.getElementById('sidebar').classList.add('collapsed');
-        }
+        if (saved === '0') { state.sidebarOpen = false; document.getElementById('sidebar').classList.add('collapsed'); }
     }
 
     /* ============================================================
@@ -769,7 +780,7 @@
     });
     Quill.register({ 'formats/lineheight': LineHeight }, true);
 
-    /* COMMENT BLOT — uses INLINE scope so it doesn't bleed across paragraphs */
+    /* COMMENT BLOT */
     const Inline = Quill.import('blots/inline');
     class CommentBlot extends Inline {
         static create(value) {
@@ -794,26 +805,19 @@
         modules: { toolbar: '#toolbar', history: { delay: 800, maxStack: 200, userOnly: true } }
     });
 
-    /* FIX: After any text change, remove the 'comment' format from the cursor position
-       so typing after a comment-highlighted span does NOT continue the highlight.
-       This is the core fix for yellow highlight bleeding. */
     quill.on('text-change', function(delta, oldDelta, source) {
         updateWordCount();
         if (source === 'user') {
             state.lastTypeTime = Date.now();
-            // Remove comment format from cursor if it leaked
             const sel = quill.getSelection();
             if (sel && sel.length === 0) {
                 const format = quill.getFormat(sel.index, 1);
                 if (format.comment) {
-                    // Check if cursor is at the END of a comment blot (not inside it)
-                    // by checking if the character before has comment but position itself is boundary
                     const charBefore = sel.index > 0 ? quill.getFormat(sel.index - 1, 1) : {};
                     const charAfter = quill.getFormat(sel.index, 1);
                     if (charBefore.comment && !charAfter.comment) {
-                        // We're at the boundary - this is fine
+                        // boundary, fine
                     } else if (charBefore.comment && charAfter.comment && charBefore.comment !== charAfter.comment) {
-                        // Between two different comments - remove
                         quill.format('comment', false, 'silent');
                     }
                 }
@@ -822,10 +826,7 @@
         }
     });
 
-    /* FIX: When cursor moves after a comment span, strip the leaked format.
-       BUT: never steal focus from the title input or comment textarea. */
     quill.on('selection-change', function(range, oldRange, source) {
-        // If comment modal is open or title is focused, do NOT process selection changes
         const commentModalOpen = els.commentModal.style.display !== 'none';
         const titleFocused = document.activeElement === els.title;
         if (commentModalOpen || titleFocused) return;
@@ -837,7 +838,6 @@
             }
         }
         updateSizeInput(range);
-        // Format painter
         if (range && range.length > 0 && state.painter && state.painterArmed) {
             const fmt = state.painter;
             state.painter = null; state.painterArmed = false;
@@ -863,7 +863,6 @@
         setTimeout(() => { state.painterArmed = true; }, 50);
     });
 
-    /* Font size stepper */
     const sizeInput = document.getElementById('size-input');
     function currentSizePx(range) { const f = quill.getFormat(range || undefined); return f.size || '11px'; }
     function updateSizeInput(range) { const s = currentSizePx(range); sizeInput.value = parseInt(s, 10) || 11; }
@@ -873,7 +872,6 @@
     sizeInput.addEventListener('change', () => { let v = parseInt(sizeInput.value, 10); if (isNaN(v)) return; v = Math.max(8, Math.min(72, v)); applySize(v + 'px'); });
     sizeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sizeInput.blur(); } });
 
-    /* Line spacing popover */
     const lsBtn = document.getElementById('ls-btn');
     lsBtn.addEventListener('click', () => {
         if (!els.lsMenu.classList.contains('hidden')) { els.lsMenu.classList.add('hidden'); return; }
@@ -891,10 +889,8 @@
         els.lsMenu.classList.remove('hidden');
     });
 
-    /* Comment button */
     document.getElementById('comment-btn').addEventListener('click', startComment);
 
-    /* Tooltips */
     setTimeout(() => {
         const map = {
             '.ql-bold': 'Bold (Ctrl+B)', '.ql-italic': 'Italic (Ctrl+I)', '.ql-underline': 'Underline (Ctrl+U)',
@@ -928,7 +924,7 @@
     }, 500);
 
     /* ============================================================
-       MOBILE CHECKBOX TOGGLE (debounced)
+       MOBILE CHECKBOX TOGGLE
     ============================================================ */
     const editorEl = document.querySelector('.ql-editor');
     let tStartX = 0, tStartY = 0;
@@ -967,32 +963,17 @@
 
     /* ============================================================
        TITLE HANDLING
-       All handlers attached via JS — no inline handlers that fight focus flow.
-       Key insight: never call quill.focus() or editor focus from title handlers.
     ============================================================ */
     (function setupTitleHandlers() {
         const titleEl = els.title;
-
-        // Select all text when focused
-        titleEl.addEventListener('focus', () => {
-            setTimeout(() => titleEl.select(), 10);
-        });
-
-        // Enter key moves to editor
+        titleEl.addEventListener('focus', () => { setTimeout(() => titleEl.select(), 10); });
         titleEl.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                titleEl.blur();
-                // Don't force quill focus — user can click editor themselves
-            }
+            if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
         });
-
-        // On blur: validate + save (no confirm dialogs that steal focus)
         titleEl.addEventListener('blur', () => {
             if (!state.docId || state.isGuest) return;
             const newTitle = titleEl.value.trim() || 'Untitled Document';
             if (titleEl.value.trim() === '') titleEl.value = 'Untitled Document';
-            // Duplicate check
             const isDuplicate = state.docs.some(d =>
                 d.id !== state.docId &&
                 (d.title || '').trim().toLowerCase() === newTitle.toLowerCase()
@@ -1005,11 +986,7 @@
             }
             triggerSave();
         });
-
-        // Live input — just trigger save after debounce
-        titleEl.addEventListener('input', () => {
-            if (state.docId && !state.isGuest) triggerSave();
-        });
+        titleEl.addEventListener('input', () => { if (state.docId && !state.isGuest) triggerSave(); });
     })();
 
     /* ============================================================
@@ -1054,7 +1031,6 @@
                 els.status.textContent = 'Live View';
                 state.comments = data.comments || {}; renderComments();
                 updateWordCount();
-                // Hide the "add note" button for guests
                 if (els.addNoteBtnWrapper) els.addNoteBtnWrapper.style.display = 'none';
             } else {
                 showToast('Shared note not found.');
@@ -1069,7 +1045,7 @@
         if (u) {
             state.isGuest = false; if (state.guestUnsubscribe) state.guestUnsubscribe();
             els.userEmail.textContent = u.email;
-            els.userEmail.title = u.email; // tooltip shows full email on hover
+            els.userEmail.title = u.email;
             els.authScreen.classList.add('hidden'); els.previewBanner.classList.add('hidden');
             els.dashboard.classList.remove('hidden', 'opacity-0'); els.loggedInControls.classList.remove('hidden');
             els.sidebar.classList.remove('hidden'); els.hamburgerBtn.classList.remove('hidden');
@@ -1155,15 +1131,12 @@
             const snap = await db.collection('shared_docs').doc(shareId).get();
             if (!snap.exists) { showToast('Shared note not found.'); els.loadingScreen.classList.add('hidden'); return; }
             const data = snap.data();
-            // Store receiver's uid and email in the shared doc's receivers list
             const receiverInfo = { uid: state.user.uid, email: state.user.email, receivedAt: Date.now() };
-            // Update shared_doc with receiver info
             try {
                 await db.collection('shared_docs').doc(shareId).set({
                     receivers: firebase.firestore.FieldValue.arrayUnion(receiverInfo)
                 }, { merge: true });
             } catch (e) { console.warn('Could not update receivers list', e); }
-
             await db.collection('users').doc(state.user.uid).collection('docs').add({
                 title: data.t, content: data.c, isFavorite: false, folderId: null,
                 importedFromShareId: shareId, comments: data.comments || {},
@@ -1177,7 +1150,7 @@
     }
 
     /* ============================================================
-       SIDEBAR RENDER — FOLDERS with double-tap rename
+       SIDEBAR RENDER — FOLDERS
     ============================================================ */
     function renderFolders() {
         els.folderList.innerHTML = '';
@@ -1204,11 +1177,8 @@
 
             div.appendChild(leftDiv);
             div.appendChild(delBtn);
-
-            // Click to filter
             leftDiv.onclick = () => filterDocs(f.id);
 
-            // Double-tap / double-click to rename
             let tapCount = 0;
             let tapTimer = null;
             const triggerRename = (e) => {
@@ -1232,9 +1202,7 @@
     }
 
     function startFolderRename(folderId, currentName, emoji, nameSpan) {
-        // Prevent double-invocation if already renaming
         if (document.querySelector('.folder-rename-input')) return;
-
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'folder-rename-input';
@@ -1244,35 +1212,21 @@
         input.select();
 
         let committed = false;
-
-        const doCancel = () => {
-            if (committed) return;
-            committed = true;
-            try { input.replaceWith(nameSpan); } catch (e) {}
-        };
-
+        const doCancel = () => { if (committed) return; committed = true; try { input.replaceWith(nameSpan); } catch (e) {} };
         const doCommit = () => {
             if (committed) return;
             committed = true;
             const newName = input.value.trim();
-            if (!newName || newName === currentName) {
-                try { input.replaceWith(nameSpan); } catch (e) {}
-                return;
-            }
-            // Defer confirm so blur event fully completes first — prevents double-firing
+            if (!newName || newName === currentName) { try { input.replaceWith(nameSpan); } catch (e) {} return; }
             setTimeout(async () => {
                 const confirmed = window.confirm(`Rename "${currentName}" to "${newName}"?`);
-                if (!confirmed) return; // Firestore not changed; Firestore snapshot will re-render correctly
+                if (!confirmed) return;
                 try {
-                    await db.collection('users').doc(state.user.uid).collection('folders')
-                        .doc(folderId).update({ name: newName });
+                    await db.collection('users').doc(state.user.uid).collection('folders').doc(folderId).update({ name: newName });
                     showToast(`Renamed to "${newName}"`);
-                } catch (e) {
-                    console.error(e); showToast('Rename failed.');
-                }
+                } catch (e) { console.error(e); showToast('Rename failed.'); }
             }, 0);
         };
-
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); doCommit(); }
             if (e.key === 'Escape') { e.preventDefault(); doCancel(); }
@@ -1293,7 +1247,7 @@
     }
 
     /* ============================================================
-       DOC LIST RENDER — with Info icon + Dup icon
+       DOC LIST RENDER
     ============================================================ */
     const DUP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>';
     const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
@@ -1339,14 +1293,8 @@
                     ${d.isFavorite ? '<span class="text-gold text-[10px]">★</span>' : ''}
                 </div>`;
 
-            // Info button
-            div.querySelector('[data-info]').addEventListener('click', (e) => {
-                e.stopPropagation(); showDocInfo(d.id);
-            });
-            // Dup button
-            div.querySelector('[data-dup]').addEventListener('click', (e) => {
-                e.stopPropagation(); duplicateDocFromSidebar(e, d.id);
-            });
+            div.querySelector('[data-info]').addEventListener('click', (e) => { e.stopPropagation(); showDocInfo(d.id); });
+            div.querySelector('[data-dup]').addEventListener('click', (e) => { e.stopPropagation(); duplicateDocFromSidebar(e, d.id); });
             div.onclick = (e) => { if (!e.target.closest('button')) openDoc(d.id, d); };
             els.docList.appendChild(div);
         });
@@ -1355,6 +1303,12 @@
     /* ============================================================
        FILE INFO MODAL
     ============================================================ */
+    // FIX: showCurrentDocInfo() for header button — shows info for currently open doc
+    window.showCurrentDocInfo = function() {
+        if (!state.docId) return;
+        showDocInfo(state.docId);
+    };
+
     async function showDocInfo(docId) {
         const doc = state.docs.find(d => d.id === docId);
         if (!doc) return;
@@ -1373,7 +1327,6 @@
 
         if (doc.shareId) {
             html += `<div><span class="font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">Share Status</span><p class="mt-0.5 text-green-600 dark:text-green-400">🔗 Shared publicly</p></div>`;
-            // Fetch receivers
             try {
                 const sharedSnap = await db.collection('shared_docs').doc(doc.shareId).get();
                 if (sharedSnap.exists) {
@@ -1400,7 +1353,6 @@
 
     function closeInfoModal() { els.infoModal.style.display = 'none'; }
     window.closeInfoModal = closeInfoModal;
-
     els.infoModal.addEventListener('click', (e) => { if (e.target === els.infoModal) closeInfoModal(); });
 
     function escapeHtml(str) {
@@ -1408,7 +1360,7 @@
     }
 
     /* ============================================================
-       MARGINS / RULER — with cm tick marks and reset
+       MARGINS / RULER — FIX: proper alignment
     ============================================================ */
     function applyMargins() {
         const ed = document.querySelector('.ql-editor');
@@ -1427,22 +1379,18 @@
     function buildRuler() {
         const rulerEl = document.getElementById('ruler');
         if (!rulerEl) return;
-        const W = 794; // paper width px
-        const DPI = 96; // screen DPI assumption
-        const CM_TO_PX = DPI / 2.54; // ~37.8px per cm
+        const W = 794;
+        const DPI = 96;
+        const CM_TO_PX = DPI / 2.54;
 
         let html = '';
-        // Margin zones
         html += `<div class="margin-zone" style="left:0;width:${state.marginL}px;"></div>`;
         html += `<div class="margin-zone" style="right:0;width:${state.marginR}px;"></div>`;
 
-        // Tick marks canvas-style via absolute divs
-        // Draw ticks every 0.5cm, labels every 1cm
         const totalCm = W / CM_TO_PX;
         for (let cm = 0; cm <= totalCm; cm += 0.5) {
             const x = Math.round(cm * CM_TO_PX);
             const isMajor = (cm % 1 === 0);
-            const isHalf = !isMajor;
             const tickH = isMajor ? 10 : 6;
             const col = document.documentElement.classList.contains('dark') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
             html += `<div style="position:absolute;left:${x}px;bottom:0;width:1px;height:${tickH}px;background:${col};pointer-events:none;"></div>`;
@@ -1452,7 +1400,6 @@
             }
         }
 
-        // Handles
         html += `<div class="handle" id="hL" style="left:${state.marginL - 5}px;" title="Drag to set left margin"></div>`;
         html += `<div class="handle" id="hR" style="left:${W - state.marginR - 5}px;" title="Drag to set right margin"></div>`;
 
@@ -1501,6 +1448,9 @@
         els.favBtn.disabled = false; els.delBtn.disabled = false; els.downBtn.disabled = false;
         els.dupBtn.disabled = false; els.commentsBtn.disabled = false;
         els.shareBtn.disabled = false; els.folderSelect.disabled = false;
+        // FIX: enable header star and info buttons
+        if (els.headerFavBtn) els.headerFavBtn.disabled = false;
+        if (els.headerInfoBtn) els.headerInfoBtn.disabled = false;
         els.folderSelect.value = data.folderId || '';
         els.syncBanner.classList.add('hidden');
         state.marginL = data.marginL || 96; state.marginR = data.marginR || 96;
@@ -1587,10 +1537,6 @@
             const currentContent = JSON.parse(JSON.stringify(quill.getContents()));
             const titleVal = els.title.value.trim() || 'Untitled';
 
-            // Build a flat dot-notation update object for the user's own doc.
-            // We write content/title/etc. directly, and each comment entry
-            // as its own dot-path so Firestore sees individual key changes.
-            // This keeps the security rules diff clean for comment-only writes.
             const userDocUpdate = {
                 title: titleVal,
                 content: currentContent,
@@ -1600,37 +1546,25 @@
                 marginR: state.marginR,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
-            // Write each comment as a separate dot-notation field so that
-            // adding/removing one comment only shows that key in affectedKeys()
             const comments = state.comments || {};
-            Object.keys(comments).forEach(cid => {
-                userDocUpdate['comments.' + cid] = comments[cid];
-            });
+            Object.keys(comments).forEach(cid => { userDocUpdate['comments.' + cid] = comments[cid]; });
 
-            // Use update() (not set+merge) so we don't accidentally wipe fields
-            // Note: first-time save on a new doc may need set — handle both
             const userRef = db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId);
             try {
                 await userRef.update(userDocUpdate);
             } catch (e) {
-                // update() fails if doc doesn't exist yet — fall back to set
                 if (e.code === 'not-found') {
                     await userRef.set({ ...userDocUpdate, comments: comments, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
                 } else { throw e; }
             }
 
-            // Sync to shared_doc if this doc is shared — owner-only write, no field restriction
             const active = state.docs.find(d => d.id === state.docId);
             if (active && active.shareId) {
                 const sharedUpdate = {
-                    t: titleVal,
-                    c: currentContent,
+                    t: titleVal, c: currentContent,
                     theme: localStorage.getItem('theme') || 'light'
                 };
-                // Write each comment individually here too for consistency
-                Object.keys(comments).forEach(cid => {
-                    sharedUpdate['comments.' + cid] = comments[cid];
-                });
+                Object.keys(comments).forEach(cid => { sharedUpdate['comments.' + cid] = comments[cid]; });
                 await db.collection('shared_docs').doc(active.shareId).update(sharedUpdate);
             }
 
@@ -1671,21 +1605,11 @@
 
     /* ============================================================
        COMMENTS / NOTES
-       Rules:
-       - Guests: view only, NO adding notes
-       - Owner: can add and delete ANY note
-       - Shared-receiver: can add own notes, delete only own notes
     ============================================================ */
-
-    // Store the selection when user initiates a comment (before quill loses focus)
     let _pendingCommentRange = null;
 
     function startComment() {
-        if (state.isGuest) {
-            showToast('Sign in to add notes.');
-            return;
-        }
-        // Capture selection NOW before anything else changes it
+        if (state.isGuest) { showToast('Sign in to add notes.'); return; }
         const range = quill.getSelection();
         if (!range || range.length === 0) {
             showToast('Select some text in the document first, then tap the note button.');
@@ -1693,25 +1617,15 @@
         }
         _pendingCommentRange = { index: range.index, length: range.length };
         const quote = quill.getText(range.index, range.length).slice(0, 120);
-
         els.commentQuote.textContent = '"' + quote + '"';
         els.commentModal.dataset.quote = quill.getText(range.index, range.length).slice(0, 200);
         els.commentText.value = '';
-
-        // Show modal
         els.commentModal.style.display = 'flex';
-
-        // FIX: quill steals focus via selection-change after modal opens.
-        // We must defer focus until after all quill events have fired.
-        // Using two rAF + setTimeout chain ensures we're past the event loop.
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 setTimeout(() => {
                     els.commentText.focus();
-                    // Restore the cursor to textarea in case it lost it
-                    if (document.activeElement !== els.commentText) {
-                        els.commentText.focus();
-                    }
+                    if (document.activeElement !== els.commentText) els.commentText.focus();
                 }, 80);
             });
         });
@@ -1727,11 +1641,7 @@
         const text = els.commentText.value.trim();
         if (!text) { showToast('Please write a note first.'); els.commentText.focus(); return; }
         if (state.isGuest) { showToast('Sign in to add notes.'); return; }
-
-        if (!_pendingCommentRange) {
-            showToast('Lost text selection — please select text again and retry.');
-            closeCommentModal(); return;
-        }
+        if (!_pendingCommentRange) { showToast('Lost text selection — please select text again and retry.'); closeCommentModal(); return; }
         const { index: idx, length: len } = _pendingCommentRange;
         const quote = els.commentModal.dataset.quote || '';
         const cid = 'c' + Date.now() + Math.floor(Math.random() * 9999);
@@ -1774,7 +1684,6 @@
         els.commentsList.innerHTML = '';
         keys.sort((a, b) => (state.comments[a].ts || 0) - (state.comments[b].ts || 0)).forEach(cid => {
             const c = state.comments[cid];
-            // Permission: owner can delete all; receiver can only delete own; guest can't delete
             const canDelete = !state.isGuest && (isOwner || (c.author === currentUserEmail));
 
             const card = document.createElement('div');
@@ -1786,22 +1695,18 @@
                     <span class="text-[10px] text-muted truncate max-w-[150px]">${escapeHtml(c.author || '')} · ${c.ts ? new Date(c.ts).toLocaleDateString() : ''}</span>
                     ${canDelete ? `<button data-resolve="${cid}" title="Resolve this note" class="flex-shrink-0 inline-flex items-center gap-1 text-[9.5px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 px-2 py-0.5 rounded-full transition-colors active:scale-95"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Resolve</button>` : ''}
                 </div>`;
-            card.querySelector('[data-resolve]')?.addEventListener('click', (e) => {
-                e.stopPropagation(); deleteComment(cid);
-            });
+            card.querySelector('[data-resolve]')?.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(cid); });
             card.onclick = (e) => { if (!e.target.closest('button')) jumpToComment(cid); };
             els.commentsList.appendChild(card);
         });
     }
 
-    /* FIX: Jump to exact comment location and highlight */
     function jumpToComment(cid) {
         document.querySelectorAll('.ql-comment.active-comment').forEach(e => e.classList.remove('active-comment'));
         const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
         if (span) {
             span.classList.add('active-comment');
             span.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Also set quill selection to this location
             const blot = Quill.find(span);
             if (blot) {
                 const index = quill.getIndex(blot);
@@ -1810,7 +1715,6 @@
                 quill.focus();
             }
         } else {
-            // No span found (receiver-only comment without highlight) — scroll to quote text if possible
             showToast('Note highlighted in panel.');
         }
     }
@@ -1820,70 +1724,95 @@
         setTimeout(() => jumpToComment(cid), 100);
     }
 
+    /* ============================================================
+       FIX: deleteComment — robust yellow highlight removal
+       
+       The root issue: quill.formatText() marks the delta for removal
+       but the DOM span may not be gone yet if Quill batches renders.
+       We force a synchronous update by:
+       1. Finding ALL spans for this cid (Quill can split blots)
+       2. Using updateContents() with an explicit Delta that sets
+          comment=false for the exact character range
+       3. Calling quill.update() to flush any pending render
+    ============================================================ */
     async function deleteComment(cid) {
         if (!confirm('Resolve and remove this note?')) return;
 
         const activeDoc = state.docs.find(d => d.id === state.docId);
         const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
 
-        // Remove ALL highlight spans for this cid from the Quill editor.
-        // querySelectorAll handles cases where Quill split a blot across nodes.
-        // blot.length() is more reliable than span.textContent.length.
         if (!isSharedReceiver) {
-            const spans = Array.from(document.querySelectorAll(`.ql-comment[data-cid="${cid}"]`));
-            spans.forEach(span => {
-                const blot = Quill.find(span);
-                if (blot) {
-                    const i = quill.getIndex(blot);
-                    const len = (typeof blot.length === 'function') ? blot.length() : span.textContent.length;
-                    quill.formatText(i, len, 'comment', false, 'api');
+            // FIX: Build a precise Delta to strip the comment format
+            // by scanning the full document contents for this cid
+            const contents = quill.getContents();
+            const Delta = Quill.import('delta');
+            let removeDelta = new Delta();
+            let offset = 0;
+
+            contents.ops.forEach(op => {
+                const len = typeof op.insert === 'string' ? op.insert.length : 1;
+                if (op.attributes && op.attributes.comment === cid) {
+                    // This range has our comment — retain it while removing the attribute
+                    removeDelta = removeDelta.retain(offset).retain(len, { comment: null });
+                    offset = 0;
+                } else {
+                    offset += len;
                 }
             });
-            // Belt-and-suspenders: strip any leftover active-comment class
-            document.querySelectorAll('.ql-comment.active-comment').forEach(el => el.classList.remove('active-comment'));
+
+            // Apply the delta if it has any ops (i.e. we found the comment)
+            if (removeDelta.ops.length > 0) {
+                quill.updateContents(removeDelta, 'api');
+                // Force Quill to flush its render pipeline synchronously
+                quill.update('api');
+            }
+
+            // Belt-and-suspenders: directly remove any lingering DOM spans
+            // This handles edge cases where Quill's delta didn't match DOM state
+            requestAnimationFrame(() => {
+                document.querySelectorAll(`.ql-comment[data-cid="${cid}"]`).forEach(span => {
+                    // Unwrap: replace span with its text content
+                    const parent = span.parentNode;
+                    if (parent) {
+                        while (span.firstChild) parent.insertBefore(span.firstChild, span);
+                        parent.removeChild(span);
+                    }
+                });
+                // Clean up any leftover active-comment class
+                document.querySelectorAll('.ql-comment.active-comment').forEach(el => el.classList.remove('active-comment'));
+            });
         }
 
         // Optimistic UI update
         delete state.comments[cid];
         renderComments();
 
-        // Use dot-notation FieldValue.delete() so Firestore rules diff sees
-        // ONLY the single 'comments.XYZ' key changing — not the whole document.
-        // This is critical: set(merge:true) with a full comments map causes
-        // all comment keys to appear "changed" in affectedKeys(), which breaks
-        // the per-user permission check in the rules.
         const fieldPath = 'comments.' + cid;
         const atomicDelete = { [fieldPath]: firebase.firestore.FieldValue.delete() };
 
         try {
             if (isSharedReceiver) {
-                // Receiver path: update shared_doc only (rules enforce authorUid check)
                 await db.collection('shared_docs')
                     .doc(activeDoc.importedFromShareId)
                     .update(atomicDelete);
-                // Mirror deletion in their local copy
                 await db.collection('users').doc(state.user.uid)
                     .collection('docs').doc(state.docId)
                     .update(atomicDelete);
             } else {
-                // Owner path: update own doc
                 await db.collection('users').doc(state.user.uid)
                     .collection('docs').doc(state.docId)
                     .update(atomicDelete);
-                // If shared, mirror deletion in shared_doc (owner rule, no field restriction)
                 if (activeDoc && activeDoc.shareId) {
                     await db.collection('shared_docs')
                         .doc(activeDoc.shareId)
                         .update(atomicDelete);
                 }
-                // Save editor content (highlight removed above)
                 triggerSave();
             }
             showToast('Note resolved.');
         } catch (e) {
             console.error('Resolve failed:', e);
             showToast('Could not resolve — permission denied or network error.');
-            // Revert optimistic update from most recent Firestore snapshot
             const fresh = state.docs.find(d => d.id === state.docId);
             if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
         }
@@ -2044,12 +1973,8 @@
         else triggerSave();
     };
     window.toggleMobileFolderMenu = () => {
-        if (els.mobileFolderMenu.classList.contains('hidden')) {
-            renderMobileFolderList();
-            els.mobileFolderMenu.classList.remove('hidden');
-        } else {
-            els.mobileFolderMenu.classList.add('hidden');
-        }
+        if (els.mobileFolderMenu.classList.contains('hidden')) { renderMobileFolderList(); els.mobileFolderMenu.classList.remove('hidden'); }
+        else { els.mobileFolderMenu.classList.add('hidden'); }
     };
     function renderMobileFolderList() {
         els.mobileFolderListItems.innerHTML = '';
@@ -2067,18 +1992,37 @@
         });
     }
     window.setDocFolder = (id) => { els.folderSelect.value = id; triggerSave(); els.mobileFolderMenu.classList.add('hidden'); };
+
+    /* FIX: updateFavIcon also updates the new header-fav-btn */
     window.toggleFavorite = () => {
         state.isFav = !state.isFav; updateFavIcon(); triggerSave(); renderDocs();
-        els.favBtn.classList.add('pop'); els.mFavBtn.classList.add('pop');
-        setTimeout(() => { els.favBtn.classList.remove('pop'); els.mFavBtn.classList.remove('pop'); }, 280);
+        [els.favBtn, els.mFavBtn, els.headerFavBtn].forEach(btn => {
+            if (!btn) return;
+            btn.classList.add('pop');
+            setTimeout(() => btn.classList.remove('pop'), 280);
+        });
         showToast(state.isFav ? '⭐ Marked as Important' : 'Removed from Important');
     };
+
     function updateFavIcon() {
-        els.favBtn.className = `hidden md:block p-2 rounded-full transition active:scale-90 ${state.isFav ? 'text-gold' : 'text-muted hover:text-gold'}`;
+        // Hidden original fav-btn (kept for compatibility)
+        els.favBtn.className = `hidden p-2 rounded-full transition active:scale-90 ${state.isFav ? 'text-gold' : 'text-muted hover:text-gold'}`;
         els.favBtn.title = state.isFav ? 'Unmark important' : 'Mark important';
+        // Mobile fav btn
         els.mFavBtn.className = `md:hidden p-2 rounded-full transition active:scale-90 text-xl leading-none ${state.isFav ? 'text-gold' : 'text-muted'}`;
         els.mFavBtn.title = state.isFav ? 'Unmark important' : 'Mark important';
+        // FIX: Header inline star button
+        if (els.headerFavBtn) {
+            if (state.isFav) {
+                els.headerFavBtn.classList.add('is-fav');
+                els.headerFavBtn.title = 'Unmark important';
+            } else {
+                els.headerFavBtn.classList.remove('is-fav');
+                els.headerFavBtn.title = 'Mark as important';
+            }
+        }
     }
+
     window.filterDocs = (f) => {
         state.activeFilter = f;
         document.querySelectorAll('#sidebar .bg-white\\/10').forEach(e => e.classList.remove('bg-white/10', 'text-white'));
@@ -2103,7 +2047,6 @@
         }
     });
 
-    /* Close dropdowns when clicking outside */
     document.addEventListener('click', (e) => {
         const menu = els.mobileMenuDropdown;
         if (!menu.classList.contains('hidden') && !e.target.closest('.mobile-menu-container') && !menu.contains(e.target))
@@ -2121,16 +2064,12 @@
     window.toggleToolbarPosition = function() {
         const isBottom = document.body.classList.toggle('toolbar-bottom');
         localStorage.setItem('zdToolbarPos', isBottom ? 'bottom' : 'top');
-        // Flip the icon to reflect current state
         const icon = document.getElementById('toolbar-pos-icon');
-        if (icon) {
-            icon.style.transform = isBottom ? 'rotate(180deg)' : 'rotate(0deg)';
-        }
+        if (icon) { icon.style.transform = isBottom ? 'rotate(180deg)' : 'rotate(0deg)'; }
         showToast(isBottom ? '⬇ Toolbar moved to bottom' : '⬆ Toolbar moved to top');
     };
 
     function initToolbarPosition() {
-        // Only apply on mobile
         if (window.innerWidth > 850) return;
         if (localStorage.getItem('zdToolbarPos') === 'bottom') {
             document.body.classList.add('toolbar-bottom');
@@ -2139,26 +2078,18 @@
         }
     }
 
-        // new code
-
     /* ============================================================
        MOBILE KEYBOARD TOOLBAR DOCKING FIX
     ============================================================ */
     if (window.visualViewport) {
         const updateKeyboardOffset = () => {
-            // Calculate how much the virtual keyboard pushed the viewport up
             const offset = window.innerHeight - window.visualViewport.height;
-            // Pass this value to our CSS so the toolbar floats directly above it
             document.documentElement.style.setProperty('--keyboard-offset', `${Math.max(0, offset)}px`);
         };
-        
         window.visualViewport.addEventListener('resize', updateKeyboardOffset);
         window.visualViewport.addEventListener('scroll', updateKeyboardOffset);
-        
-        // Initial setup
         updateKeyboardOffset();
     }
-        // new code here
 
     /* ============================================================
        INIT
