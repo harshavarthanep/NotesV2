@@ -1772,14 +1772,34 @@
         const activeDoc = state.docs.find(d => d.id === state.docId);
         const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
 
+        // // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
+        // if (!isSharedReceiver) {
+        //     const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
+        //     if (span) {
+        //         const blot = Quill.find(span);
+        //         if (blot) {
+        //             const i = quill.getIndex(blot);
+        //             quill.formatText(i, span.textContent.length, 'comment', false);
+        //         }
+        //     }
+        // }
+
         // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
         if (!isSharedReceiver) {
-            const span = document.querySelector(`.ql-comment[data-cid="${cid}"]`);
-            if (span) {
-                const blot = Quill.find(span);
-                if (blot) {
-                    const i = quill.getIndex(blot);
-                    quill.formatText(i, span.textContent.length, 'comment', false);
+            const spans = document.querySelectorAll(`.ql-comment[data-cid="${cid}"]`);
+            if (spans.length > 0) {
+                const firstBlot = Quill.find(spans[0]);
+                if (firstBlot) {
+                    const startIndex = quill.getIndex(firstBlot);
+                    
+                    // Calculate total length across all fragmented spans
+                    let totalLength = 0;
+                    spans.forEach(s => {
+                        const b = Quill.find(s);
+                        totalLength += (b ? b.length() : s.textContent.length);
+                    });
+                    
+                    quill.formatText(startIndex, totalLength, 'comment', false);
                 }
             }
         }
