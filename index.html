@@ -1786,22 +1786,23 @@
 
         // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
         if (!isSharedReceiver) {
-            // 1. Find EVERY span related to this note ID
-            const spans = Array.from(document.querySelectorAll(`.ql-comment[data-cid="${cid}"]`));
-            
-            // 2. Map their exact locations BEFORE we start modifying the document
-            const ranges = spans.map(span => {
-                const blot = Quill.find(span);
-                return blot ? { index: quill.getIndex(blot), length: blot.length() } : null;
-            }).filter(Boolean);
+            const delta = quill.getContents();
+            let currIndex = 0;
+            const rangesToRemove = [];
 
-            // 3. Sort ranges backwards (highest index first)
-            // CRITICAL: Removing formats from the bottom up ensures we don't shift text indexes!
-            ranges.sort((a, b) => b.index - a.index);
+            // 1. Scan Quill's internal model directly instead of the DOM
+            delta.forEach((op) => {
+                const opLength = typeof op.insert === 'string' ? op.insert.length : 1;
+                if (op.attributes && op.attributes.comment === cid) {
+                    rangesToRemove.push({ index: currIndex, length: opLength });
+                }
+                currIndex += opLength;
+            });
 
-            // 4. Remove the format precisely from each individual fragment
-            ranges.forEach(range => {
-                quill.formatText(range.index, range.length, 'comment', false);
+            // 2. Remove formatting backwards to avoid shifting index coordinates
+            rangesToRemove.sort((a, b) => b.index - a.index);
+            rangesToRemove.forEach(range => {
+                quill.formatText(range.index, range.length, 'comment', false, 'silent');
             });
         }
 
