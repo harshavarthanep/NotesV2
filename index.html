@@ -1889,13 +1889,33 @@
         } catch (err) { showToast('Error creating folder'); return null; }
     };
 
-    window.handleCreateFolderAction = async () => {
+    // window.handleCreateFolderAction = async () => {
+    //     els.mobileFolderMenu.classList.add('hidden');
+    //     const id = await createNewFolder();
+    //     if (id && state.docId) {
+    //         await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update({ folderId: id });
+    //         els.folderSelect.value = id;
+    //         showToast('Moved to new folder.');
+    //     }
+    // };
+
+        window.handleCreateFolderAction = async () => {
         els.mobileFolderMenu.classList.add('hidden');
+        
+        // 1. Capture the previous folder ID to revert to if the user cancels
+        const activeDoc = state.docs.find(d => d.id === state.docId);
+        const previousFolderId = activeDoc && activeDoc.folderId ? activeDoc.folderId : '';
+
         const id = await createNewFolder();
+        
         if (id && state.docId) {
+            // Success: update the database and UI
             await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update({ folderId: id });
             els.folderSelect.value = id;
             showToast('Moved to new folder.');
+        } else {
+            // Cancelled: reset the dropdown back to the document's current folder
+            els.folderSelect.value = previousFolderId;
         }
     };
 
