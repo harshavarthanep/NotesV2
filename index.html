@@ -1785,7 +1785,7 @@
     //     }
 
 
-        async function deleteComment(cid) {
+    async function deleteComment(cid) {
         if (!confirm('Resolve and remove this note?')) return;
 
         const activeDoc = state.docs.find(d => d.id === state.docId);
@@ -1797,13 +1797,15 @@
             let currIndex = 0;
             const ranges = [];
             
-            delta.forEach(op => {
-                const len = typeof op.insert === 'string' ? op.insert.length : (op.insert ? 1 : 0);
-                if (op.attributes && op.attributes.comment === cid) {
-                    ranges.push({ index: currIndex, length: len });
-                }
-                currIndex += len;
-            });
+            if (delta && delta.ops) {
+                delta.ops.forEach(op => {
+                    const len = typeof op.insert === 'string' ? op.insert.length : (op.insert ? 1 : 0);
+                    if (op.attributes && op.attributes.comment === cid) {
+                        ranges.push({ index: currIndex, length: len });
+                    }
+                    currIndex += len;
+                });
+            }
 
             // Strip format backwards to prevent index shifting
             for (let i = ranges.length - 1; i >= 0; i--) {
@@ -1852,6 +1854,11 @@
             if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
         }
     }
+
+    window.toggleCommentsPanel = () => {
+        els.commentsPanel.classList.toggle('hidden');
+        els.commentsBtn.classList.toggle('text-accent');
+    };
 
         // New code added above
         
