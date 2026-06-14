@@ -1785,73 +1785,76 @@
     //     }
 
             async function deleteComment(cid) {
-            if (!confirm('Resolve and remove this note?')) return;
-    
-            const activeDoc = state.docs.find(d => d.id === state.docId);
-            const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
-    
-            // 1. Remove highlight directly from Quill's internal Delta engine
-            if (!isSharedReceiver) {
-                const delta = quill.getContents();
-                const cleanOps = delta.ops.map(op => {
-                    if (op.attributes && op.attributes.comment === cid) {
-                        const newAttrs = Object.assign({}, op.attributes);
-                        delete newAttrs.comment; // Strip the specific comment ID
-                        
-                        // Remove empty attributes object to cleanly strip formatting
-                        if (Object.keys(newAttrs).length === 0) return { insert: op.insert };
-                        return { insert: op.insert, attributes: newAttrs };
-                    }
-                    return op;
-                });
-                
-                const sel = quill.getSelection();
-                quill.setContents({ ops: cleanOps }, 'silent');
-                if (sel) quill.setSelection(sel, 'silent');
+        if (!confirm('Resolve and remove this note?')) return;
+
+        const activeDoc = state.docs.find(d => d.id === state.docId);
+        const isSharedReceiver = !!(activeDoc && activeDoc.importedFromShareId);
+
+        // 1. Mathematically locate and remove the highlight (bypasses complex DOM bugs)
+        if (!isSharedReceiver) {
+            const delta = quill.getContents();
+            let currIndex = 0;
+            const ranges = [];
+            
+            // Find every chunk that has this specific comment ID attached
+            delta.ops.forEach(op => {
+                const len = typeof op.insert === 'string' ? op.insert.length : 1;
+                if (op.attributes && op.attributes.comment === cid) {
+                    ranges.push({ index: currIndex, length: len });
+                }
+                currIndex += len;
+            });
+
+            // Strip format backwards to prevent index shifting
+            for (let i = ranges.length - 1; i >= 0; i--) {
+                quill.formatText(ranges[i].index, ranges[i].length, 'comment', false, 'silent');
             }
-    
-            // Optimistic UI update
-            delete state.comments[cid];
-            renderComments();
-    
-            // 2. Prepare atomic delete for the comment data
-            const fieldPath = 'comments.' + cid;
-            const atomicUpdate = { [fieldPath]: firebase.firestore.FieldValue.delete() };
-    
-            try {
-                if (isSharedReceiver) {
-                    await db.collection('shared_docs').doc(activeDoc.importedFromShareId).update(atomicUpdate);
-                    await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update(atomicUpdate);
-                } else {
-                    // CRITICAL FIX: Update the 'content' field in the exact same Firebase call!
-                    // This prevents the snapshot listener from pulling old highlighted text
-                    // and overwriting the editor before the text is saved.
-                    atomicUpdate['content'] = JSON.parse(JSON.stringify(quill.getContents()));
-                    atomicUpdate['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
-    
-                    await db.collection('users').doc(state.user.uid)
-                        .collection('docs').doc(state.docId)
-                        .update(atomicUpdate);
-    
-                    // Update the public shared link if it exists
-                    if (activeDoc && activeDoc.shareId) {
-                        const sharedUpdate = { 
+            
+            // CRITICAL: Force the app to recognize this as an active edit! 
+            // This stops Firebase from instantly reverting the text before the save completes.
+            state.lastTypeTime = Date.now();
+        }
+
+        // Optimistic UI update for the sidebar
+        delete state.comments[cid];
+        renderComments();
+
+        // 2. Prepare the atomic delete for the database
+        const fieldPath = 'comments.' + cid;
+        const atomicUpdate = { [fieldPath]: firebase.firestore.FieldValue.delete() };
+
+        try {
+            if (isSharedReceiver) {
+                await db.collection('shared_docs').doc(activeDoc.importedFromShareId).update(atomicUpdate);
+                await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update(atomicUpdate);
+            } else {
+                // CRITICAL: Bundle the perfectly clean text into the EXACT SAME database call
+                atomicUpdate['content'] = JSON.parse(JSON.stringify(quill.getContents()));
+                atomicUpdate['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
+
+                await db.collection('users').doc(state.user.uid)
+                    .collection('docs').doc(state.docId)
+                    .update(atomicUpdate);
+
+                if (activeDoc && activeDoc.shareId) {
+                    await db.collection('shared_docs')
+                        .doc(activeDoc.shareId)
+                        .update({
                             [fieldPath]: firebase.firestore.FieldValue.delete(),
                             'c': atomicUpdate['content'],
                             'theme': localStorage.getItem('theme') || 'light'
-                        };
-                        await db.collection('shared_docs').doc(activeDoc.shareId).update(sharedUpdate);
-                    }
+                        });
                 }
-                showToast('Note resolved.');
-            } catch (e) {
-                console.error('Resolve failed:', e);
-                showToast('Could not resolve — permission denied or network error.');
-                // Revert optimistic update
-                const fresh = state.docs.find(d => d.id === state.docId);
-                if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
             }
+            showToast('Note resolved.');
+        } catch (e) {
+            console.error('Resolve failed:', e);
+            showToast('Could not resolve — permission denied or network error.');
+            // Revert UI if the network fails
+            const fresh = state.docs.find(d => d.id === state.docId);
+            if (fresh && fresh.comments) { state.comments = Object.assign({}, fresh.comments); renderComments(); }
         }
+    }
 
 // New Code for notes mentioned above
         
