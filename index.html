@@ -1786,22 +1786,23 @@
 
         // Remove highlight span from Quill editor (owner only; receiver has no highlight in editor)
         if (!isSharedReceiver) {
-            const spans = document.querySelectorAll(`.ql-comment[data-cid="${cid}"]`);
-            if (spans.length > 0) {
-                const firstBlot = Quill.find(spans[0]);
-                if (firstBlot) {
-                    const startIndex = quill.getIndex(firstBlot);
-                    
-                    // Calculate total length across all fragmented spans
-                    let totalLength = 0;
-                    spans.forEach(s => {
-                        const b = Quill.find(s);
-                        totalLength += (b ? b.length() : s.textContent.length);
-                    });
-                    
-                    quill.formatText(startIndex, totalLength, 'comment', false);
-                }
-            }
+            // 1. Find EVERY span related to this note ID
+            const spans = Array.from(document.querySelectorAll(`.ql-comment[data-cid="${cid}"]`));
+            
+            // 2. Map their exact locations BEFORE we start modifying the document
+            const ranges = spans.map(span => {
+                const blot = Quill.find(span);
+                return blot ? { index: quill.getIndex(blot), length: blot.length() } : null;
+            }).filter(Boolean);
+
+            // 3. Sort ranges backwards (highest index first)
+            // CRITICAL: Removing formats from the bottom up ensures we don't shift text indexes!
+            ranges.sort((a, b) => b.index - a.index);
+
+            // 4. Remove the format precisely from each individual fragment
+            ranges.forEach(range => {
+                quill.formatText(range.index, range.length, 'comment', false);
+            });
         }
 
         // Optimistic UI update
