@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#1a73e8">
-    <title>ZenDocs | Pro V2</title>
+    <title>ZenDocs | Pro V4</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1899,25 +1899,25 @@
     //     }
     // };
 
-            window.handleCreateFolderAction = async () => {
-            els.mobileFolderMenu.classList.add('hidden');
-            
-            // 1. Capture the previous folder ID to revert to if the user cancels
-            const activeDoc = state.docs.find(d => d.id === state.docId);
-            const previousFolderId = activeDoc && activeDoc.folderId ? activeDoc.folderId : '';
-    
-            const id = await createNewFolder();
-            
-            if (id && state.docId) {
-                // Success: update the database and UI
-                await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update({ folderId: id });
-                els.folderSelect.value = id;
-                showToast('Moved to new folder.');
-            } else {
-                // Cancelled: reset the dropdown back to the document's current folder
-                els.folderSelect.value = previousFolderId;
-            }
-        };
+        window.handleCreateFolderAction = async () => {
+        els.mobileFolderMenu.classList.add('hidden');
+        
+        // 1. Capture the previous folder ID to revert to if the user cancels
+        const activeDoc = state.docs.find(d => d.id === state.docId);
+        const previousFolderId = activeDoc && activeDoc.folderId ? activeDoc.folderId : '';
+
+        const id = await createNewFolder();
+        
+        if (id && state.docId) {
+            // Success: update the database and UI
+            await db.collection('users').doc(state.user.uid).collection('docs').doc(state.docId).update({ folderId: id });
+            els.folderSelect.value = id;
+            showToast('Moved to new folder.');
+        } else {
+            // Cancelled: reset the dropdown back to the document's current folder
+            els.folderSelect.value = previousFolderId;
+        }
+    };
 
     window.deleteFolder = async (id) => {
         const folder = state.folders.find(f => f.id === id);
