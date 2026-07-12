@@ -2411,15 +2411,32 @@
             return ops.map(o => typeof o.insert === 'string' ? o.insert : '').join('');
         } catch (e) { return ''; }
     }
-    window.openPalette = () => {
+    // window.openPalette = () => {
+    //     els.paletteModal.classList.add('open');
+    //     els.paletteInput.value = '';
+    //     state.paletteIndex = 0;
+    //     renderPaletteResults('');
+    //     setTimeout(() => els.paletteInput.focus(), 60);
+    // };
+    // window.closePalette = () => els.paletteModal.classList.remove('open');
+    // els.paletteModal.addEventListener('click', (e) => { if (e.target === els.paletteModal) closePalette(); });
+
+        window.openPalette = () => {
+        // 1. Explicitly blur the editor so the cursor stops blinking
+        if (typeof quill !== 'undefined') quill.blur();
+        if (document.activeElement) document.activeElement.blur();
+
         els.paletteModal.classList.add('open');
         els.paletteInput.value = '';
         state.paletteIndex = 0;
         renderPaletteResults('');
-        setTimeout(() => els.paletteInput.focus(), 60);
+        
+        // 2. Focus immediately to satisfy strict mobile browser security rules
+        els.paletteInput.focus();
+        
+        // 3. Keep a slightly longer fallback timeout in case the modal's fade-in animation interrupts the focus
+        setTimeout(() => els.paletteInput.focus(), 150);
     };
-    window.closePalette = () => els.paletteModal.classList.remove('open');
-    els.paletteModal.addEventListener('click', (e) => { if (e.target === els.paletteModal) closePalette(); });
 
     function renderPaletteResults(q) {
         const query = q.trim().toLowerCase();
