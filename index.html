@@ -2411,38 +2411,17 @@
             return ops.map(o => typeof o.insert === 'string' ? o.insert : '').join('');
         } catch (e) { return ''; }
     }
-    // window.openPalette = () => {
-    //     els.paletteModal.classList.add('open');
-    //     els.paletteInput.value = '';
-    //     state.paletteIndex = 0;
-    //     renderPaletteResults('');
-    //     setTimeout(() => els.paletteInput.focus(), 60);
-    // };
-    // window.closePalette = () => els.paletteModal.classList.remove('open');
-    // els.paletteModal.addEventListener('click', (e) => { if (e.target === els.paletteModal) closePalette(); });
-
-        window.openPalette = () => {
-        // 1. Un-hide the modal immediately
+    window.openPalette = () => {
         els.paletteModal.classList.add('open');
-        
-        // 2. CRITICAL FIX: Force the browser to calculate the layout synchronously.
-        // Without this line, the browser thinks the input is still hidden and ignores focus().
-        void els.paletteModal.offsetHeight;
-        
-        // 3. Directly focus the search bar.
-        // By NOT blurring Quill first, we trick the mobile keyboard into staying open.
-        els.paletteInput.focus();
-
-        // 4. Reset the palette state
         els.paletteInput.value = '';
         state.paletteIndex = 0;
         renderPaletteResults('');
-        
-        // 5. Tiny fallback timeout for slower Android devices
-        setTimeout(() => {
-            els.paletteInput.focus();
-        }, 50);
+        setTimeout(() => els.paletteInput.focus(), 60);
     };
+    window.closePalette = () => els.paletteModal.classList.remove('open');
+    els.paletteModal.addEventListener('click', (e) => { if (e.target === els.paletteModal) closePalette(); });
+
+        
     function renderPaletteResults(q) {
         const query = q.trim().toLowerCase();
         let results = state.docs;
