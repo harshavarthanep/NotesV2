@@ -2422,22 +2422,27 @@
     // els.paletteModal.addEventListener('click', (e) => { if (e.target === els.paletteModal) closePalette(); });
 
         window.openPalette = () => {
-        // 1. Explicitly blur the editor so the cursor stops blinking
-        if (typeof quill !== 'undefined') quill.blur();
-        if (document.activeElement) document.activeElement.blur();
-
+        // 1. Un-hide the modal immediately
         els.paletteModal.classList.add('open');
+        
+        // 2. CRITICAL FIX: Force the browser to calculate the layout synchronously.
+        // Without this line, the browser thinks the input is still hidden and ignores focus().
+        void els.paletteModal.offsetHeight;
+        
+        // 3. Directly focus the search bar.
+        // By NOT blurring Quill first, we trick the mobile keyboard into staying open.
+        els.paletteInput.focus();
+
+        // 4. Reset the palette state
         els.paletteInput.value = '';
         state.paletteIndex = 0;
         renderPaletteResults('');
         
-        // 2. Focus immediately to satisfy strict mobile browser security rules
-        els.paletteInput.focus();
-        
-        // 3. Keep a slightly longer fallback timeout in case the modal's fade-in animation interrupts the focus
-        setTimeout(() => els.paletteInput.focus(), 150);
+        // 5. Tiny fallback timeout for slower Android devices
+        setTimeout(() => {
+            els.paletteInput.focus();
+        }, 50);
     };
-
     function renderPaletteResults(q) {
         const query = q.trim().toLowerCase();
         let results = state.docs;
