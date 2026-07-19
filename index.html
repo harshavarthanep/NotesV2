@@ -2023,20 +2023,78 @@
         });
     }
 
+    // function startFolderRename(folderId, currentName, emoji, nameSpan) {
+    //     if (document.querySelector('.folder-rename-input')) return;
+    //     const input = document.createElement('input');
+    //     input.type = 'text';
+    //     input.className = 'folder-rename-input';
+    //     input.value = currentName;
+    //     nameSpan.replaceWith(input);
+    //     /* FIX (V3.5): same caret pattern as the palette — focus synchronously,
+    //        then retry until the browser actually hands over the cursor */
+    //     const focusIt = () => { try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); } };
+    //     focusIt(); input.select();
+    //     let _frTries = 0;
+    //     const _frIv = setInterval(() => {
+    //         if (!document.body.contains(input) || document.activeElement === input || _frTries++ > 15) { clearInterval(_frIv); return; }
+    //         focusIt();
+    //     }, 60);
+
+    //     let committed = false;
+    //     const doCancel = () => { if (committed) return; committed = true; try { input.replaceWith(nameSpan); } catch (e) {} };
+    //     const doCommit = () => {
+    //         if (committed) return;
+    //         committed = true;
+    //         const newName = input.value.trim();
+    //         /* FIX: always restore the label first */
+    //         try { input.replaceWith(nameSpan); } catch (e) {}
+    //         if (!newName || newName === currentName) return;
+    //         setTimeout(async () => {
+    //             const confirmed = await zdConfirm(
+    //                 `"${currentName}" will become "${newName}".`,
+    //                 { title: 'Rename folder?', okText: 'Rename', icon: '✏️' }
+    //             );
+    //             if (!confirmed) return;
+    //             try {
+    //                 await db.collection('users').doc(state.user.uid).collection('folders').doc(folderId).update({ name: newName });
+    //                 showToast(`Renamed to "${newName}"`);
+    //             } catch (e) { console.error(e); showToast('Rename failed.'); }
+    //         }, 0);
+    //     };
+    //     input.addEventListener('keydown', (e) => {
+    //         if (e.key === 'Enter') { e.preventDefault(); doCommit(); }
+    //         if (e.key === 'Escape') { e.preventDefault(); doCancel(); }
+    //     });
+    //     input.addEventListener('blur', doCommit);
+    // }
+
     function startFolderRename(folderId, currentName, emoji, nameSpan) {
         if (document.querySelector('.folder-rename-input')) return;
+        
+        // --- FIX: Explicitly blur the editor so it stops stealing the cursor ---
+        try { quill.blur(); } catch(e) {}
+        if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) {
+            document.activeElement.blur();
+        }
+        // ---------------------------------------------------------------------
+
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'folder-rename-input';
         input.value = currentName;
         nameSpan.replaceWith(input);
+        
         /* FIX (V3.5): same caret pattern as the palette — focus synchronously,
            then retry until the browser actually hands over the cursor */
         const focusIt = () => { try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); } };
         focusIt(); input.select();
+        
         let _frTries = 0;
         const _frIv = setInterval(() => {
-            if (!document.body.contains(input) || document.activeElement === input || _frTries++ > 15) { clearInterval(_frIv); return; }
+            if (!document.body.contains(input) || document.activeElement === input || _frTries++ > 15) { 
+                clearInterval(_frIv); 
+                return; 
+            }
             focusIt();
         }, 60);
 
@@ -4015,21 +4073,55 @@
     }
     /* V3.5: structured quick cards via modal (heading + multi-line content) */
     let _kbCol = null;
+    // function kbQuickCard(colId) {
+    //     _kbCol = colId;
+    //     const t = document.getElementById('kb-card-title');
+    //     const x = document.getElementById('kb-card-text');
+    //     t.value = ''; x.value = '';
+    //     const modal = document.getElementById('kb-card-modal');
+    //     modal.classList.add('open');
+    //     const focusIt = () => { try { t.focus({ preventScroll: true }); } catch (e) { t.focus(); } };
+    //     focusIt();
+    //     let tries = 0;
+    //     const iv = setInterval(() => {
+    //         if (!modal.classList.contains('open') || document.activeElement === t || tries++ > 15) { clearInterval(iv); return; }
+    //         focusIt();
+    //     }, 60);
+    // }
+
+
     function kbQuickCard(colId) {
         _kbCol = colId;
+        
+        // --- FIX: Explicitly blur the editor so it stops stealing the cursor ---
+        try { quill.blur(); } catch(e) {}
+        if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) {
+            document.activeElement.blur();
+        }
+        // ---------------------------------------------------------------------
+
         const t = document.getElementById('kb-card-title');
         const x = document.getElementById('kb-card-text');
         t.value = ''; x.value = '';
         const modal = document.getElementById('kb-card-modal');
         modal.classList.add('open');
+        
         const focusIt = () => { try { t.focus({ preventScroll: true }); } catch (e) { t.focus(); } };
         focusIt();
+        
         let tries = 0;
         const iv = setInterval(() => {
-            if (!modal.classList.contains('open') || document.activeElement === t || tries++ > 15) { clearInterval(iv); return; }
+            // FIX: Stop the interval if focus successfully lands ANYWHERE inside the card modal
+            const isFocusedInside = document.activeElement && document.activeElement.closest('#kb-card-modal');
+            
+            if (!modal.classList.contains('open') || isFocusedInside || tries++ > 15) { 
+                clearInterval(iv); 
+                return; 
+            }
             focusIt();
         }, 60);
     }
+        
     window.closeKbCardModal = () => { document.getElementById('kb-card-modal').classList.remove('open'); _kbCol = null; };
     /* tiny markdown-ish parser: # ## headings, - bullets, [] / [x] tasks */
     function linesToOps(text) {
