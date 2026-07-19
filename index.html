@@ -1567,20 +1567,20 @@
         }, 60);
         setTimeout(() => { focusIt(); input.select(); }, 150);
     }
-    // /* FIX v3: while the note picker is open, focus always returns to its search box */
-    // document.addEventListener('focusin', (e) => {
-    //     const pm = document.getElementById('note-picker-modal');
-    //     if (pm && pm.classList.contains('open') && !e.target.closest('#note-picker-modal')) {
-    //         try { document.getElementById('picker-search').focus({ preventScroll: true }); } catch (err) {}
-    //     }
-    // });
-    // /* FIX v3: while the link modal is open, any focus escape returns to the URL box */
-    // document.addEventListener('focusin', (e) => {
-    //     const lm = document.getElementById('link-modal');
-    //     if (lm.classList.contains('open') && !e.target.closest('#link-modal')) {
-    //         try { document.getElementById('link-url').focus({ preventScroll: true }); } catch (err) {}
-    //     }
-    // });
+    /* FIX v3: while the note picker is open, focus always returns to its search box */
+    document.addEventListener('focusin', (e) => {
+        const pm = document.getElementById('note-picker-modal');
+        if (pm && pm.classList.contains('open') && !e.target.closest('#note-picker-modal')) {
+            try { document.getElementById('picker-search').focus({ preventScroll: true }); } catch (err) {}
+        }
+    });
+    /* FIX v3: while the link modal is open, any focus escape returns to the URL box */
+    document.addEventListener('focusin', (e) => {
+        const lm = document.getElementById('link-modal');
+        if (lm.classList.contains('open') && !e.target.closest('#link-modal')) {
+            try { document.getElementById('link-url').focus({ preventScroll: true }); } catch (err) {}
+        }
+    });
     window.closeLinkModal = () => { document.getElementById('link-modal').classList.remove('open'); _linkCtx = null; };
     window.applyLink = () => {
         if (!_linkCtx) return closeLinkModal();
