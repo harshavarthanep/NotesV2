@@ -4949,31 +4949,38 @@
     // })();
 
      /* ============================================================
-       GLOBAL INPUT FOCUS PROTECTOR (FIX FOR QUILL STEALING CARET)
+       GLOBAL INPUT FOCUS PROTECTOR (PRO FIX FOR QUILL FOCUS BUGS)
     ============================================================ */
     (function protectAllInputs() {
         const protectFocus = (e) => {
             const target = e.target;
+            if (!target) return;
             
-            // If the user clicks an input or textarea that is NOT the main editor
-            if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !target.closest('.ql-editor')) {
+            // If the user clicks an input, textarea, or select that is NOT the main editor
+            if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !target.closest('.ql-editor')) {
                 
-                // 1. Force Quill to drop focus immediately
+                // 1. CRITICAL: Stop the event from reaching Quill's document-level listeners.
+                // Quill uses mousedown/pointerdown to call e.preventDefault(), which blocks the caret.
+                e.stopPropagation();
+                
+                // 2. Force Quill to drop focus immediately
                 try { quill.blur(); } catch (err) {}
                 
-                // 2. Ensure the clicked input claims the caret
-                setTimeout(() => {
+                // 3. Ensure the clicked input claims the caret
+                requestAnimationFrame(() => {
                     if (document.activeElement !== target) {
                         try { target.focus({ preventScroll: true }); } catch(err) { target.focus(); }
                     }
-                }, 10);
+                });
             }
         };
 
-        // Using the 'capture' phase (true) ensures this runs BEFORE Quill's internal listeners can hijack the click
-        document.addEventListener('mousedown', protectFocus, true);
-        document.addEventListener('touchstart', protectFocus, { passive: true, capture: true });
-    })();   
+        // Intercept at the window level during the capture phase (true)
+        // This ensures our code runs BEFORE Quill's event listeners can react
+        window.addEventListener('mousedown', protectFocus, true);
+        window.addEventListener('touchstart', protectFocus, { passive: false, capture: true });
+        window.addEventListener('pointerdown', protectFocus, true);
+    })();
 
     /* ============================================================
        V3.4 — COLLAPSIBLE SIDEBAR SECTIONS & ACCENT THEMES
