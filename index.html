@@ -4940,13 +4940,40 @@
     };
 
     /* Focus nudge for the outline search (mobile caret) */
-    (function () {
-        const osInp = document.getElementById('outline-search');
-        if (!osInp) return;
-        osInp.addEventListener('pointerup', () => {
-            setTimeout(() => { if (document.activeElement !== osInp) { try { osInp.focus({ preventScroll: true }); } catch (e) { osInp.focus(); } } }, 40);
-        });
-    })();
+    // (function () {
+    //     const osInp = document.getElementById('outline-search');
+    //     if (!osInp) return;
+    //     osInp.addEventListener('pointerup', () => {
+    //         setTimeout(() => { if (document.activeElement !== osInp) { try { osInp.focus({ preventScroll: true }); } catch (e) { osInp.focus(); } } }, 40);
+    //     });
+    // })();
+
+     /* ============================================================
+       GLOBAL INPUT FOCUS PROTECTOR (FIX FOR QUILL STEALING CARET)
+    ============================================================ */
+    (function protectAllInputs() {
+        const protectFocus = (e) => {
+            const target = e.target;
+            
+            // If the user clicks an input or textarea that is NOT the main editor
+            if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !target.closest('.ql-editor')) {
+                
+                // 1. Force Quill to drop focus immediately
+                try { quill.blur(); } catch (err) {}
+                
+                // 2. Ensure the clicked input claims the caret
+                setTimeout(() => {
+                    if (document.activeElement !== target) {
+                        try { target.focus({ preventScroll: true }); } catch(err) { target.focus(); }
+                    }
+                }, 10);
+            }
+        };
+
+        // Using the 'capture' phase (true) ensures this runs BEFORE Quill's internal listeners can hijack the click
+        document.addEventListener('mousedown', protectFocus, true);
+        document.addEventListener('touchstart', protectFocus, { passive: true, capture: true });
+    })();   
 
     /* ============================================================
        V3.4 — COLLAPSIBLE SIDEBAR SECTIONS & ACCENT THEMES
