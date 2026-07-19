@@ -1567,20 +1567,20 @@
         }, 60);
         setTimeout(() => { focusIt(); input.select(); }, 150);
     }
-    /* FIX v3: while the note picker is open, focus always returns to its search box */
-    document.addEventListener('focusin', (e) => {
-        const pm = document.getElementById('note-picker-modal');
-        if (pm && pm.classList.contains('open') && !e.target.closest('#note-picker-modal')) {
-            try { document.getElementById('picker-search').focus({ preventScroll: true }); } catch (err) {}
-        }
-    });
-    /* FIX v3: while the link modal is open, any focus escape returns to the URL box */
-    document.addEventListener('focusin', (e) => {
-        const lm = document.getElementById('link-modal');
-        if (lm.classList.contains('open') && !e.target.closest('#link-modal')) {
-            try { document.getElementById('link-url').focus({ preventScroll: true }); } catch (err) {}
-        }
-    });
+    // /* FIX v3: while the note picker is open, focus always returns to its search box */
+    // document.addEventListener('focusin', (e) => {
+    //     const pm = document.getElementById('note-picker-modal');
+    //     if (pm && pm.classList.contains('open') && !e.target.closest('#note-picker-modal')) {
+    //         try { document.getElementById('picker-search').focus({ preventScroll: true }); } catch (err) {}
+    //     }
+    // });
+    // /* FIX v3: while the link modal is open, any focus escape returns to the URL box */
+    // document.addEventListener('focusin', (e) => {
+    //     const lm = document.getElementById('link-modal');
+    //     if (lm.classList.contains('open') && !e.target.closest('#link-modal')) {
+    //         try { document.getElementById('link-url').focus({ preventScroll: true }); } catch (err) {}
+    //     }
+    // });
     window.closeLinkModal = () => { document.getElementById('link-modal').classList.remove('open'); _linkCtx = null; };
     window.applyLink = () => {
         if (!_linkCtx) return closeLinkModal();
@@ -4859,36 +4859,37 @@
 
 
     /* ============================================================
-       GLOBAL INPUT FOCUS PROTECTOR (FIX FOR QUILL STEALING CARET)
+       GLOBAL INPUT FOCUS PROTECTOR
     ============================================================ */
     (function protectAllInputs() {
-        const editor = document.querySelector('#editor-container');
-        
-        const handleFocus = (e) => {
+        const handleInteraction = (e) => {
             const target = e.target;
+            if (!target) return;
             
-            // 1. Only act if the target is an input/textarea/select outside the editor
-            const isEditorInput = target.closest('#editor-container') || target.id === 'doc-title';
-            const isInteractable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
-
-            if (isInteractable && !isEditorInput) {
-                // 2. Force the editor to blur instantly
+            // Check if the target is an input-like element that ISN'T in the editor
+            const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+            const isEditor = target.closest('#editor-container') || target.id === 'doc-title';
+            
+            if (isInput && !isEditor) {
+                // 1. Stop propagation so Quill never knows the click happened
+                e.stopImmediatePropagation();
+                
+                // 2. Clear Quill focus
                 if (typeof quill !== 'undefined') {
                     quill.blur();
                 }
                 
-                // 3. Ensure the element gets focused immediately
-                // We don't need a timeout here; if we stop propagation, 
-                // the browser will naturally focus the clicked element.
-                target.focus();
+                // 3. Focus the target element
+                requestAnimationFrame(() => {
+                    target.focus({ preventScroll: true });
+                });
             }
         };
 
-        // Capture phase (true) is crucial here. 
-        // It catches the event before Quill's internal listeners.
-        window.addEventListener('mousedown', handleFocus, true);
-        window.addEventListener('touchstart', handleFocus, { passive: false, capture: true });
-        window.addEventListener('pointerdown', handleFocus, true);
+        // Capture phase (true) runs before Quill's event listeners
+        window.addEventListener('mousedown', handleInteraction, true);
+        window.addEventListener('touchstart', handleInteraction, { passive: false, capture: true });
+        window.addEventListener('pointerdown', handleInteraction, true);
     })();
 
 
