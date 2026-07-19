@@ -4859,38 +4859,38 @@
 
 
     /* ============================================================
-       GLOBAL INPUT FOCUS PROTECTOR
-    ============================================================ */
-    (function protectAllInputs() {
-        const handleInteraction = (e) => {
-            const target = e.target;
-            if (!target) return;
-            
-            // Check if the target is an input-like element that ISN'T in the editor
-            const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
-            const isEditor = target.closest('#editor-container') || target.id === 'doc-title';
-            
-            if (isInput && !isEditor) {
-                // 1. Stop propagation so Quill never knows the click happened
-                e.stopImmediatePropagation();
-                
-                // 2. Clear Quill focus
-                if (typeof quill !== 'undefined') {
-                    quill.blur();
-                }
-                
-                // 3. Focus the target element
-                requestAnimationFrame(() => {
-                    target.focus({ preventScroll: true });
-                });
-            }
-        };
+   GLOBAL FOCUS LOCK (PREVENTS QUILL FROM STEALING CARET)
+============================================================ */
+(function lockFocus() {
+    // We attach this to the document capture phase (true), 
+    // which runs before any of Quill's internal listeners.
+    document.addEventListener('pointerdown', (e) => {
+        const target = e.target;
+        
+        // Define which elements are "safe" to click without triggering the editor
+        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+        const isEditor = target.closest('.ql-editor') || target.id === 'doc-title';
 
-        // Capture phase (true) runs before Quill's event listeners
-        window.addEventListener('mousedown', handleInteraction, true);
-        window.addEventListener('touchstart', handleInteraction, { passive: false, capture: true });
-        window.addEventListener('pointerdown', handleInteraction, true);
-    })();
+        if (isInput && !isEditor) {
+            // 1. STOP: This stops Quill's internal listeners from seeing the click
+            e.stopImmediatePropagation();
+            
+            // 2. BLUR: Explicitly force the editor to let go
+            if (typeof quill !== 'undefined') {
+                quill.blur();
+            }
+
+            // 3. FOCUS: Force focus to the target element
+            // We use requestAnimationFrame to ensure this happens after the browser's layout cycle
+            requestAnimationFrame(() => {
+                if (document.activeElement !== target) {
+                    target.focus({ preventScroll: true });
+                }
+            });
+        }
+    }, true);
+})();
+        
 
 
     /* ============================================================
