@@ -804,7 +804,7 @@
                     <div class="text-[11px] text-muted leading-snug">Get the app experience — full screen, offline shell, and your notes one tap away.</div>
                     <div id="pwa-ios-steps" class="hidden text-[11px] text-text mt-1.5 bg-bg border border-border rounded-lg px-2.5 py-1.5">On iPhone/iPad: tap <b>Share</b> <svg class="w-3 h-3 inline -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M12 3v13m0-13l-4 4m4-4l4 4"/></svg> then <b>Add to Home Screen</b>.</div>
                     <div class="flex gap-2 mt-2.5">
-                        <button id="pwa-install-btn" onclick="pwaInstall()" class="px-3.5 py-1.5 text-xs font-bold rounded-lg text-white active:scale-95 transition" style="background-image:var(--zd-grad)">Install</button>
+                        <button id="pwa-install-btn" onclick="openDlModal()" class="px-3.5 py-1.5 text-xs font-bold rounded-lg text-white active:scale-95 transition" style="background-image:var(--zd-grad)">Install</button>
                         <button onclick="hideInstallPop(true)" class="px-3 py-1.5 text-xs font-semibold rounded-lg text-muted hover:bg-gray-100 dark:hover:bg-gray-800 transition active:scale-95">Not now</button>
                     </div>
                 </div>
@@ -812,6 +812,26 @@
             </div>
         </div>
 
+        <!-- New code -->
+
+        <div id="dl-modal" class="zd-cmodal">
+          <div class="zd-cmodal-box max-w-sm">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><img src="./icon-192.png" class="w-6 h-6 rounded-lg" alt=""> Get ZenDocs</h3>
+              <button onclick="closeDlModal()" class="text-muted hover:text-danger text-xl leading-none active:scale-90">&times;</button>
+            </div>
+            <p class="text-[10px] text-muted mb-3">Native apps run in the background, so reminders reach you even with the window closed.</p>
+            <div class="space-y-1.5">
+              <button onclick="zdDownload('android')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border bg-bg hover:border-accent transition active:scale-[.99] text-left"><span class="flex-1 min-w-0"><span class="block text-xs font-bold text-text">Android — APK</span><span class="block text-[9px] text-muted">native app · background notifications</span></span></button>
+              <button onclick="zdDownload('windows')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border bg-bg hover:border-accent transition active:scale-[.99] text-left"><span class="flex-1 min-w-0"><span class="block text-xs font-bold text-text">Windows — installer</span><span class="block text-[9px] text-muted">native app · runs in the tray</span></span></button>
+              <button onclick="zdDownload('mac')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border bg-bg hover:border-accent transition active:scale-[.99] text-left"><span class="flex-1 min-w-0"><span class="block text-xs font-bold text-text">macOS — .dmg</span><span class="block text-[9px] text-muted">native app · menu-bar resident</span></span></button>
+              <button onclick="zdDownload('linux')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border bg-bg hover:border-accent transition active:scale-[.99] text-left"><span class="flex-1 min-w-0"><span class="block text-xs font-bold text-text">Linux — AppImage</span><span class="block text-[9px] text-muted">native app · background notifications</span></span></button>
+              <div class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border bg-bg opacity-60 text-left"><span class="flex-1 min-w-0"><span class="block text-xs font-bold text-text">iPhone / iPad</span><span class="block text-[9px] text-muted">Apple only allows apps via the App Store — use the PWA below (Share → Add to Home Screen)</span></span></div>
+              <button onclick="zdPwaFromModal()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition active:scale-[.99]" style="border-color:rgb(var(--accent-rgb) / .6); background:rgb(var(--accent-rgb) / .07)"><span class="flex-1 min-w-0"><span class="block text-xs font-bold text-text">PWA — every OS, install now</span><span class="block text-[9px] text-amber-500 font-semibold">&#9888; Not a full native app — an installable shortcut. Reminders fire only while it&rsquo;s open or minimized.</span></span></button>
+            </div>
+          </div>
+        </div>
+        
         <!-- V3.9: FEATURE SWITCHES -->
         <div id="feat-modal" class="zd-cmodal">
             <div class="zd-cmodal-box max-w-sm">
@@ -6345,7 +6365,7 @@
         const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
         if (!zdDeferredPrompt && !isIOS) return; /* browser can't install (or already installed) */
         document.getElementById('pwa-ios-steps').classList.toggle('hidden', !isIOS || !!zdDeferredPrompt);
-        document.getElementById('pwa-install-btn').classList.toggle('hidden', !zdDeferredPrompt);
+        document.getElementById('pwa-install-btn').classList.remove('hidden');
         document.getElementById('pwa-pop').classList.remove('translate-y-full');
     }
     window.hideInstallPop = (dismiss) => {
@@ -6361,6 +6381,7 @@
         // if (outcome !== 'accepted') localStorage.setItem('zdInstDis', Date.now());
         if (outcome !== 'accepted') window._zdInstDismissed = true;
         hideInstallPop();
+        closeDlModal();
     };
 
     /* ---------- FEATURE SWITCHES (device-local, never synced) ---------- */
