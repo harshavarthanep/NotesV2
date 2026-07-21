@@ -6396,7 +6396,8 @@
     function maybeShowInstall() {
         if (zdStandalone() || localStorage.getItem('zdInstalled')) return;
         const dis = +localStorage.getItem('zdInstDis') || 0;
-        if (Date.now() - dis < 7 * 864e5) return; /* respect "Not now" for a week */
+        // if (Date.now() - dis < 7 * 864e5) return; /* respect "Not now" for a week */
+        if (window._zdInstDismissed) return; /* dismissed — until the next page load */
         const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
         if (!zdDeferredPrompt && !isIOS) return; /* browser can't install (or already installed) */
         document.getElementById('pwa-ios-steps').classList.toggle('hidden', !isIOS || !!zdDeferredPrompt);
@@ -6405,14 +6406,16 @@
     }
     window.hideInstallPop = (dismiss) => {
         document.getElementById('pwa-pop').classList.add('translate-y-full');
-        if (dismiss) localStorage.setItem('zdInstDis', Date.now());
+        // if (dismiss) localStorage.setItem('zdInstDis', Date.now());
+        if (dismiss) window._zdInstDismissed = true;
     };
     window.pwaInstall = async () => {
         if (!zdDeferredPrompt) return;
         zdDeferredPrompt.prompt();
         const { outcome } = await zdDeferredPrompt.userChoice;
         zdDeferredPrompt = null;
-        if (outcome !== 'accepted') localStorage.setItem('zdInstDis', Date.now());
+        // if (outcome !== 'accepted') localStorage.setItem('zdInstDis', Date.now());
+        if (outcome !== 'accepted') window._zdInstDismissed = true;
         hideInstallPop();
     };
 
