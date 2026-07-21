@@ -513,11 +513,6 @@
             @page { size:A4; margin:1in; }
         }
 
-        /* New Code */
-        @media (max-width: 850px) {
-            #task-progress { display: none !important; }
-        }
-
         @media (max-width: 850px) {
             body.toolbar-bottom #toolbar.ql-toolbar {
                 position: fixed !important;
@@ -6631,6 +6626,11 @@
         document.getElementById('getapp-modal').classList.add('open');
     };
     window.closeGetApp = () => document.getElementById('getapp-modal').classList.remove('open');
+
+    /* New Code */
+    @media (max-width: 850px) {
+        #task-progress { display: none !important; }
+    }    
 
     /* --- snoozable reminders (overrides the V3.9 fireReminder) --- */
     let _rfId = null;
