@@ -6583,8 +6583,8 @@
     /* Paste your package links here after building them with PWABuilder
        (see README steps). Empty = the row shows "Coming soon". */
     const ZD_APP_LINKS = {
-        android: 'https://github.com/harshavarthanep/NotesV2/raw/refs/heads/main/ZenDocs.apk',   // e.g. https://github.com/YOU/REPO/releases/download/v1/ZenDocs.apk
-        windows: 'https://github.com/harshavarthanep/NotesV2/raw/refs/heads/main/ZenDocs.sideload.msix',   // .msix from PWABuilder
+        android: 'https://github.com/harshavarthanep/NotesV2/releases/download/App/ZenDocs.apk',   // e.g. https://github.com/YOU/REPO/releases/download/v1/ZenDocs.apk
+        windows: 'https://github.com/harshavarthanep/NotesV2/releases/download/App/ZenDocs.sideload.msix',   // .msix from PWABuilder
         // linux: '',     // e.g. Nativefier build
         // mac: ''        // e.g. Nativefier .app zip
     };
@@ -6607,7 +6607,8 @@
             win: '<svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-muted"><path d="M3 5.6l8-1.1v7.3H3V5.6zm0 12.8l8 1.1v-7.2H3v6.1zM12 4.3L22 3v8.8H12V4.3zm0 15.4L22 21v-8.8H12v7.5z"/></svg>',
             linux: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 text-muted"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3a3 3 0 016 0c0 1.5-1 3-1 5 0 3 3 5 3 9a4 4 0 01-4 3H8a4 4 0 01-4-3c0-4 3-6 3-9 0-2-1-3.5-1-5"/></svg>',
             apple: '<svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-muted"><path d="M16.4 12.9c0-2 1.6-3 1.7-3-.9-1.4-2.4-1.5-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.4 2 2.5 2 1 0 1.3-.6 2.5-.6s1.5.6 2.5.6 1.7-1 2.4-2c.7-1.1 1-2.1 1-2.2 0 0-1.9-.7-2.3-2.4zM14.7 6.6c.5-.7.9-1.6.8-2.6-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.8 2.5.9.1 1.8-.4 2.4-1.1z"/></svg>',
-            phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 text-muted"><rect x="7" y="2" width="10" height="20" rx="2"/><path stroke-linecap="round" d="M11 18h2"/></svg>'
+            // phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 text-muted"><rect x="7" y="2" width="10" height="20" rx="2"/><path stroke-linecap="round" d="M11 18h2"/></svg>'
+            phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-muted -ml-0.5"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path stroke-linecap="round" d="M12 18h.01"/></svg>'
         };
         const row = (icon, label, desc, url) => url
             ? `<a class="ga-row" href="${url}" target="_blank" rel="noopener">${icon}<span class="min-w-0"><span class="block text-xs font-semibold text-text">${label}</span><span class="block text-[10px] text-muted">${desc}</span></span></a>`
