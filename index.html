@@ -1413,10 +1413,10 @@
                 </div>
 
                 <div class="flex-1 flex min-h-0">
-                    <div id="task-progress" class="hidden flex-shrink-0 px-4 md:px-8 py-1.5 flex items-center gap-2 border-b border-border bg-surface/60">
+                    <!-- <div id="task-progress" class="hidden flex-shrink-0 px-4 md:px-8 py-1.5 flex items-center gap-2 border-b border-border bg-surface/60">
                         <span class="tp-label text-[10px] font-semibold text-muted whitespace-nowrap"></span>
                         <div class="flex-1 h-1.5 rounded-full bg-border overflow-hidden"><div class="tp-fill h-full rounded-full transition-all duration-300" style="background-image:var(--zd-grad);width:0%"></div></div>
-                    </div>
+                    </div> -->
                     <div id="editor-wrapper" class="opacity-50 pointer-events-none transition-opacity duration-500" style="position:relative">
                     <div id="fold-gutter" aria-hidden="true"></div>
                         <div id="paper-container" class="transition-all duration-300">
@@ -6435,7 +6435,7 @@
         { id: 'tm', label: 'Time machine', fns: ['openTimeMachine'] },
         { id: 'dt', label: 'Deep Think map', fns: ['toggleDeepThink'] },
         { id: 'folds', label: 'Collapsible headings', fns: [] },
-        { id: 'taskbar', label: 'Task progress bar', fns: [] },
+        // { id: 'taskbar', label: 'Task progress bar', fns: [] },
         { id: 'rem', label: 'Reminders', fns: ['openReminders'] }
     ];
     function zdFlags() {
@@ -6461,8 +6461,8 @@
                 });
             });
         });
-        if (!zdFeatOn('taskbar')) document.getElementById('task-progress').classList.add('hidden');
-        else updateTaskProgress();
+        // if (!zdFeatOn('taskbar')) document.getElementById('task-progress').classList.add('hidden');
+        // else updateTaskProgress();
         if (!zdFeatOn('folds')) { const g = document.getElementById('fold-gutter'); if (g) g.innerHTML = ''; }
         else scheduleFolds();
         if (!zdFeatOn('dt')) document.getElementById('dt-pane').classList.remove('open');
