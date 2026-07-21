@@ -6599,7 +6599,7 @@
             row(':window:', 'Windows', 'Installable package (.msix)', ZD_APP_LINKS.windows) +
             // row(':penguin:', 'Linux', 'Desktop package', ZD_APP_LINKS.linux) +
             // row(':apple:', 'macOS', 'Desktop package', ZD_APP_LINKS.mac) +
-            // `<div class="ga-row" style="pointer-events:none"><span class="text-lg">:iphone:</span><span class="min-w-0"><span class="block text-xs font-semibold text-text">iPhone / iPad</span><span class="block text-[10px] text-muted">Apple only allows installs via the App Store. Use Safari → Share → <b>Add to Home Screen</b> instead.</span></span></div>`;
+            `<div class="ga-row" style="pointer-events:none"><span class="text-lg">:iphone:</span><span class="min-w-0"><span class="block text-xs font-semibold text-text">iPhone / iPad</span><span class="block text-[10px] text-muted">Apple only allows installs via the App Store. Use Safari → Share → <b>Add to Home Screen</b> instead.</span></span></div>`;
         document.getElementById('ga-pwa-btn').onclick = () => {
             if (zdDeferredPrompt) { pwaInstall(); closeGetApp(); }
             else if (isIOS) { showToast('Safari → Share → Add to Home Screen'); }
