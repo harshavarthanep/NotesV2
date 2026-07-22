@@ -840,10 +840,10 @@
         </div>
         
         <!-- V4.0: REMINDER FIRED (with snooze) -->
-        <!-- <div id="rem-fire-modal" class="zd-cmodal">
-            <div class="zd-cmodal-box max-w-xs text-center"> -->
+        <div id="rem-fire-modal" class="zd-cmodal">
+            <div class="zd-cmodal-box max-w-xs text-center">
                 <!-- <div class="text-2xl mb-1">:alarm_clock:</div> -->
-                <!-- <div class="flex justify-center mb-1.5"><svg class="w-8 h-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
+                <div class="flex justify-center mb-1.5"><svg class="w-8 h-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
                 <div id="rf-title" class="text-sm font-bold text-text mb-1 truncate"></div>
                 <div class="text-[10px] text-muted mb-3">Reminder</div>
                 <div class="grid grid-cols-2 gap-1.5 mb-1.5">
@@ -855,10 +855,10 @@
                     <button onclick="rfDismiss()" class="py-2 text-xs font-semibold rounded-xl text-muted hover:bg-gray-100 dark:hover:bg-gray-800 transition active:scale-95">Dismiss</button>
                 </div>
             </div>
-        </div> -->
+        </div>
         
         <!-- V4.0: KEEP-IN-BACKGROUND NOTICE -->
-        <!-- <div id="rem-bg-modal" class="zd-cmodal">
+        <div id="rem-bg-modal" class="zd-cmodal">
             <div class="zd-cmodal-box max-w-xs">
                 <h3 class="font-bold text-sm text-gray-800 dark:text-white mb-1.5">Keep ZenDocs running :bell:</h3>
                 <p class="text-[11px] text-muted leading-snug mb-2">Reminders live on this device and can only fire <b>while ZenDocs is open</b> — a background browser tab or the installed app is enough. If you close it completely, the notification arrives the next time you open ZenDocs.</p>
@@ -868,45 +868,7 @@
                     <button onclick="closeRemBg(); openGetApp()" class="flex-1 py-2 text-xs font-bold rounded-xl text-white active:scale-95" style="background-image:var(--zd-grad)">Get the app</button>
                 </div>
             </div>
-        </div> -->
-
-        <!-- V4.0: REMINDER FIRED (with snooze) -->
-        <div id="rem-fire-modal" class="zd-cmodal">
-            <div class="zd-cmodal-box max-w-xs text-center flex flex-col items-center">
-                <div class="flex justify-center mb-2">
-                    <svg class="w-10 h-10 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                </div>
-                <div id="rf-title" class="text-base font-bold text-text mb-1 w-full truncate"></div>
-                <div class="text-[11px] text-muted mb-4 uppercase tracking-wider font-bold">Reminder</div>
-
-                <div class="grid grid-cols-2 gap-2 w-full mb-2">
-                    <button onclick="rfSnooze(10)" class="py-2 text-xs font-semibold rounded-xl bg-bg border border-border text-text hover:border-accent transition active:scale-95">Snooze 10m</button>
-                    <button onclick="rfSnooze(60)" class="py-2 text-xs font-semibold rounded-xl bg-bg border border-border text-text hover:border-accent transition active:scale-95">Snooze 1h</button>
-                </div>
-                <div class="grid grid-cols-2 gap-2 w-full">
-                    <button onclick="rfDismiss()" class="py-2 text-xs font-semibold rounded-xl bg-bg border border-border text-muted hover:text-danger transition active:scale-95">Dismiss</button>
-                    <button onclick="rfOpen()" class="py-2 text-xs font-bold rounded-xl bg-accent text-white shadow-md hover:brightness-110 transition active:scale-95">Open Note</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- V4.0: KEEP-IN-BACKGROUND NOTICE -->
-        <div id="rem-bg-modal" class="zd-cmodal">
-            <div class="zd-cmodal-box max-w-xs text-center flex flex-col items-center">
-                <div class="flex justify-center mb-2">
-                    <svg class="w-8 h-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                </div>
-                <h3 class="font-bold text-sm text-gray-800 dark:text-white mb-2">Keep ZenDocs running</h3>
-                <p class="text-[11px] text-muted leading-relaxed mb-4 text-left">
-                    Reminders currently live directly on this device. For the alarm to fire, <b>ZenDocs must remain open</b> in the background (as a browser tab or the installed app). If you swipe the app entirely closed, the alarm will ring the next time you open it.
-                </p>
-                <button onclick="closeRemBg()" class="w-full py-2.5 text-xs font-bold rounded-xl bg-accent text-white shadow-sm hover:brightness-110 active:scale-95 transition">Got it</button>
-            </div>
-        </div>
+        </div>
         
         <!-- V3.9: FEATURE SWITCHES -->
         <div id="feat-modal" class="zd-cmodal">
