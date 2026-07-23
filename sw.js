@@ -1,10 +1,10 @@
 /* ZenDocs service worker — v4 */
-const CACHE = 'zendocs-shell-v4';
-const SHELL = ['./', './index.html', './manifest.json', './icon-192.png'];
+const CACHE = 'zendocs-v4';
+const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
     self.skipWaiting();
-    e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}));
+    e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {}));
 });
 
 self.addEventListener('activate', (e) => {
@@ -15,60 +15,36 @@ self.addEventListener('activate', (e) => {
     })());
 });
 
+/* Network-first, cache fallback — the app shell works offline */
 self.addEventListener('fetch', (e) => {
     if (e.request.method !== 'GET') return;
     const url = new URL(e.request.url);
-    if (url.origin !== location.origin) return; /* never intercept Firebase/CDNs */
+    if (url.origin !== self.location.origin) return; /* let CDNs/Firebase pass through */
     e.respondWith(
         fetch(e.request).then(res => {
-            const copy = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
             return res;
-        }).catch(() =>
-            caches.match(e.request).then(m => m || caches.match('./index.html'))
-        )
+        }).catch(() => caches.match(e.request).then(m => m || caches.match('./index.html')))
     );
 });
 
-/* Snooze / Open buttons on reminder notifications */
+/* Notification buttons: Snooze / Open note.
+   Focus (or open) the app, then message it — with retries so a freshly
+   opened window has time to attach its message listener. */
 self.addEventListener('notificationclick', (e) => {
-    const tag = e.notification.tag || '';
     e.notification.close();
+    const tag = e.notification.tag || '';
+    const type = e.action === 'snooze' ? 'zd-snooze' : 'zd-open';
     e.waitUntil((async () => {
-        const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        if (e.action === 'snooze') {
-            if (cs.length) cs[0].postMessage({ type: 'zd-snooze', tag });
-            return;
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        let client = wins[0] || null;
+        if (client) { try { await client.focus(); } catch (err) {} }
+        else { try { client = await self.clients.openWindow('./'); } catch (err) {} }
+        if (!client) return;
+        for (const delay of [0, 1200, 3000, 6000]) {
+            await new Promise(r => setTimeout(r, delay));
+            try { client.postMessage({ type: type, tag: tag }); } catch (err) {}
         }
-        if (cs.length) { cs[0].focus(); cs[0].postMessage({ type: 'zd-open', tag }); }
-        else self.clients.openWindow('./');
     })());
 });
-
-// /* NEW: Listen for incoming Push Events (Background Wakeups) */
-// self.addEventListener('push', (e) => {
-//     let data = { title: 'ZenDocs Reminder', body: 'You have a scheduled note reminder.' };
-    
-//     if (e.data) {
-//         try { 
-//             data = e.data.json(); 
-//         } catch(err) { 
-//             data.body = e.data.text(); 
-//         }
-//     }
-
-//     const options = {
-//         body: data.body,
-//         icon: './icon-192.png',
-//         badge: './icon-192.png',
-//         tag: data.tag || 'zd-reminder',
-//         renotify: true,
-//         vibrate: [200, 100, 200],
-//         actions: [
-//             { action: 'open', title: 'Open note' },
-//             { action: 'snooze', title: 'Snooze 10 min' }
-//         ]
-//     };
-
-//     e.waitUntil(self.registration.showNotification(data.title, options));
-// });
