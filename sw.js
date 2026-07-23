@@ -44,3 +44,31 @@ self.addEventListener('notificationclick', (e) => {
         else self.clients.openWindow('./');
     })());
 });
+
+/* NEW: Listen for incoming Push Events (Background Wakeups) */
+self.addEventListener('push', (e) => {
+    let data = { title: 'ZenDocs Reminder', body: 'You have a scheduled note reminder.' };
+    
+    if (e.data) {
+        try { 
+            data = e.data.json(); 
+        } catch(err) { 
+            data.body = e.data.text(); 
+        }
+    }
+
+    const options = {
+        body: data.body,
+        icon: './icon-192.png',
+        badge: './icon-192.png',
+        tag: data.tag || 'zd-reminder',
+        renotify: true,
+        vibrate: [200, 100, 200],
+        actions: [
+            { action: 'open', title: 'Open note' },
+            { action: 'snooze', title: 'Snooze 10 min' }
+        ]
+    };
+
+    e.waitUntil(self.registration.showNotification(data.title, options));
+});
