@@ -6610,23 +6610,23 @@
                 <button onclick="clearReminder('${id}')" class="text-muted hover:text-danger text-base leading-none px-1 active:scale-90">\u00d7</button>
             </div>`).join('') : '<div class="text-[10px] text-muted py-3 text-center">No reminders yet. Open a note and set one above.</div>';
     }
-    // window.openDocById = (id) => {
-    //     const d = state.docs.find(x => x.id === id);
-    //     if (d) openDoc(d); else showToast('That note is no longer available.');
-    // };
-    window.openDocById = (id, _try) => {
-    const d = state.docs.find(x => x.id === id);
-    if (d) {
-        try { closeAllViews(); } catch (e) {}
-        try { closeReminders(); } catch (e) {}
-        try { closeRemFire(); } catch (e) {}
-        openDoc(d.id, d);   /* FIX: openDoc expects (id, data) */
-        return;
-    }
-    /* Notes may still be loading (e.g. app opened from a notification) — retry for ~10s */
-    if ((_try || 0) < 20) { setTimeout(() => openDocById(id, (_try || 0) + 1), 500); return; }
-    showToast('That note is no longer available.');
-    };    
+    window.openDocById = (id) => {
+        const d = state.docs.find(x => x.id === id);
+        if (d) openDoc(d); else showToast('That note is no longer available.');
+    };
+    // window.openDocById = (id, _try) => {
+    // const d = state.docs.find(x => x.id === id);
+    // if (d) {
+    //     try { closeAllViews(); } catch (e) {}
+    //     try { closeReminders(); } catch (e) {}
+    //     try { closeRemFire(); } catch (e) {}
+    //     openDoc(d.id, d);   /* FIX: openDoc expects (id, data) */
+    //     return;
+    // }
+    // /* Notes may still be loading (e.g. app opened from a notification) — retry for ~10s */
+    // if ((_try || 0) < 20) { setTimeout(() => openDocById(id, (_try || 0) + 1), 500); return; }
+    // showToast('That note is no longer available.');
+    // };    
     function fireReminder(id, rem) {
         zdBuzz([200, 100, 200]);
         showToast('\u23F0 Reminder: ' + rem.title);
@@ -6641,28 +6641,28 @@
             }
         }
     }
-    // setInterval(() => {
-    //     if (!zdFeatOn('rem')) return;
-    //     const r = zdRems(); let dirty = false;
-    //     Object.keys(r).forEach(id => {
-    //         if (!r[id].fired && r[id].t <= Date.now()) { r[id].fired = true; dirty = true; fireReminder(id, r[id]); }
-    //     });
-    //     if (dirty) zdSaveRems(r);
-    // }, 20000);
+    setInterval(() => {
+        if (!zdFeatOn('rem')) return;
+        const r = zdRems(); let dirty = false;
+        Object.keys(r).forEach(id => {
+            if (!r[id].fired && r[id].t <= Date.now()) { r[id].fired = true; dirty = true; fireReminder(id, r[id]); }
+        });
+        if (dirty) zdSaveRems(r);
+    }, 20000);
 
-     function checkReminders() {
-        if (!zdFeatOn('rem')) return;
-        const r = zdRems(); let dirty = false;
-        Object.keys(r).forEach(id => {
-            if (!r[id].fired && r[id].t <= Date.now()) { r[id].fired = true; dirty = true; fireReminder(id, r[id]); }
-        });
-        if (dirty) zdSaveRems(r);
-    }
-    setInterval(checkReminders, 20000);
-    setTimeout(checkReminders, 2500); /* fire overdue reminders right after launch */
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') checkReminders();
-    });   
+    //  function checkReminders() {
+    //     if (!zdFeatOn('rem')) return;
+    //     const r = zdRems(); let dirty = false;
+    //     Object.keys(r).forEach(id => {
+    //         if (!r[id].fired && r[id].t <= Date.now()) { r[id].fired = true; dirty = true; fireReminder(id, r[id]); }
+    //     });
+    //     if (dirty) zdSaveRems(r);
+    // }
+    // setInterval(checkReminders, 20000);
+    // setTimeout(checkReminders, 2500); /* fire overdue reminders right after launch */
+    // document.addEventListener('visibilitychange', () => {
+    //     if (document.visibilityState === 'visible') checkReminders();
+    // });   
 
     /* ============================================================
        V4.0 — APP DOWNLOADS, SNOOZABLE REMINDERS, SW MESSAGING
