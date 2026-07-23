@@ -6533,127 +6533,47 @@
     //     showToast('Reminder set for ' + new Date(t).toLocaleString() + '.');
     // };
 
-    // --- UPDATED REMINDER & NOTIFICATION FUNCTIONS ---
-
-    window.setReminder = async function () {
+    window.setReminder = async () => {
         if (!state.docId) return;
         const v = document.getElementById('rem-when').value;
         if (!v) { showToast('Pick a date & time first.'); return; }
-        
         const t = new Date(v).getTime();
         if (!(t > Date.now())) { showToast('That time is in the past.'); return; }
-    
-        // Request permission explicitly on user gesture
-        if ('Notification' in window) {
-            if (Notification.permission === 'default') {
-                const perm = await Notification.requestPermission();
-                if (perm !== 'granted') {
-                    showToast('Notification permission denied by device.');
-                    return;
-                }
-            } else if (Notification.permission === 'denied') {
-                showToast('Notifications blocked. Enable them in App / Browser settings.');
-                return;
-            }
+
+        if ('Notification' in window && Notification.permission === 'default') {
+            try { await Notification.requestPermission(); } catch (e) {}
         }
-    
+
         const r = zdRems();
         r[state.docId] = { t: t, title: els.title.value || 'Untitled', fired: false };
         zdSaveRems(r); 
         zdBuzz(20);
         renderRemList();
-        
+
+        // EXPERIMENTAL: Schedule true background notification if supported (Android Chrome)
+        if ('showTrigger' in Notification.prototype && navigator.serviceWorker) {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                reg.showNotification('⏰ ZenDocs Reminder', {
+                    body: els.title.value || 'Untitled Document',
+                    icon: './icon-192.png',
+                    badge: './icon-192.png',
+                    tag: 'zd-' + state.docId,
+                    showTrigger: new TimestampTrigger(t) // Tells the OS to fire this even if closed
+                });
+            } catch (err) {
+                console.warn('Offline notification trigger failed or unsupported:', err);
+            }
+        }
+
         showToast('Reminder set for ' + new Date(t).toLocaleString() + '.');
-    
-        // Show background notice once per session
+
+        // Trigger the background warning modal reliably
         if (!sessionStorage.getItem('zdBgShown')) {
             sessionStorage.setItem('zdBgShown', '1');
             document.getElementById('rem-bg-modal').classList.add('open');
         }
     };
-    
-    // Updated fireReminder using ServiceWorker Registration
-    fireReminder = function (id, rem) {
-        zdBuzz([200, 100, 200]);
-        _rfId = id;
-        
-        // Open in-app modal if app is actively visible
-        const fireModal = document.getElementById('rem-fire-modal');
-        if (fireModal) {
-            document.getElementById('rf-title').textContent = rem.title;
-            fireModal.classList.add('open');
-        }
-    
-        const notifOptions = {
-            body: rem.title,
-            icon: './icon-192.png',
-            badge: './icon-192.png',
-            tag: 'zd-' + id,
-            renotify: true,
-            vibrate: [200, 100, 200],
-            data: { docId: id },
-            actions: [
-                { action: 'open', title: 'Open Note' },
-                { action: 'snooze', title: 'Snooze 10m' }
-            ]
-        };
-    
-        // Trigger notification via Service Worker (Works for installed PWA / APK)
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.ready.then(reg => {
-                reg.showNotification('ZenDocs Reminder', notifOptions);
-            }).catch(err => {
-                console.warn('SW notification failed, falling back:', err);
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification('ZenDocs Reminder', notifOptions);
-                }
-            });
-        } else if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('ZenDocs Reminder', notifOptions);
-        }
-    };
-
-    // window.setReminder = async () => {
-    //     if (!state.docId) return;
-    //     const v = document.getElementById('rem-when').value;
-    //     if (!v) { showToast('Pick a date & time first.'); return; }
-    //     const t = new Date(v).getTime();
-    //     if (!(t > Date.now())) { showToast('That time is in the past.'); return; }
-
-    //     if ('Notification' in window && Notification.permission === 'default') {
-    //         try { await Notification.requestPermission(); } catch (e) {}
-    //     }
-
-    //     const r = zdRems();
-    //     r[state.docId] = { t: t, title: els.title.value || 'Untitled', fired: false };
-    //     zdSaveRems(r); 
-    //     zdBuzz(20);
-    //     renderRemList();
-
-    //     // EXPERIMENTAL: Schedule true background notification if supported (Android Chrome)
-    //     if ('showTrigger' in Notification.prototype && navigator.serviceWorker) {
-    //         try {
-    //             const reg = await navigator.serviceWorker.ready;
-    //             reg.showNotification('⏰ ZenDocs Reminder', {
-    //                 body: els.title.value || 'Untitled Document',
-    //                 icon: './icon-192.png',
-    //                 badge: './icon-192.png',
-    //                 tag: 'zd-' + state.docId,
-    //                 showTrigger: new TimestampTrigger(t) // Tells the OS to fire this even if closed
-    //             });
-    //         } catch (err) {
-    //             console.warn('Offline notification trigger failed or unsupported:', err);
-    //         }
-    //     }
-
-    //     showToast('Reminder set for ' + new Date(t).toLocaleString() + '.');
-
-    //     // Trigger the background warning modal reliably
-    //     if (!sessionStorage.getItem('zdBgShown')) {
-    //         sessionStorage.setItem('zdBgShown', '1');
-    //         document.getElementById('rem-bg-modal').classList.add('open');
-    //     }
-    // };
         
     window.clearReminder = (docId) => {
         const r = zdRems(); delete r[docId]; zdSaveRems(r);
@@ -6676,28 +6596,28 @@
         const d = state.docs.find(x => x.id === id);
         if (d) openDoc(d); else showToast('That note is no longer available.');
     };
-    // function fireReminder(id, rem) {
-    //     zdBuzz([200, 100, 200]);
-    //     showToast('\u23F0 Reminder: ' + rem.title);
-    //     if ('Notification' in window && Notification.permission === 'granted') {
-    //         try {
-    //             const n = new Notification('ZenDocs reminder', { body: rem.title, icon: './icon-192.png', badge: './icon-192.png', tag: 'zd-' + id });
-    //             n.onclick = () => { window.focus(); openDocById(id); n.close(); };
-    //         } catch (e) {
-    //             if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-    //                 navigator.serviceWorker.ready.then(reg => reg.showNotification('ZenDocs reminder', { body: rem.title, icon: './icon-192.png', tag: 'zd-' + id })).catch(() => {});
-    //             }
-    //         }
-    //     }
-    // }
-    // setInterval(() => {
-    //     if (!zdFeatOn('rem')) return;
-    //     const r = zdRems(); let dirty = false;
-    //     Object.keys(r).forEach(id => {
-    //         if (!r[id].fired && r[id].t <= Date.now()) { r[id].fired = true; dirty = true; fireReminder(id, r[id]); }
-    //     });
-    //     if (dirty) zdSaveRems(r);
-    // }, 20000);
+    function fireReminder(id, rem) {
+        zdBuzz([200, 100, 200]);
+        showToast('\u23F0 Reminder: ' + rem.title);
+        if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+                const n = new Notification('ZenDocs reminder', { body: rem.title, icon: './icon-192.png', badge: './icon-192.png', tag: 'zd-' + id });
+                n.onclick = () => { window.focus(); openDocById(id); n.close(); };
+            } catch (e) {
+                if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                    navigator.serviceWorker.ready.then(reg => reg.showNotification('ZenDocs reminder', { body: rem.title, icon: './icon-192.png', tag: 'zd-' + id })).catch(() => {});
+                }
+            }
+        }
+    }
+    setInterval(() => {
+        if (!zdFeatOn('rem')) return;
+        const r = zdRems(); let dirty = false;
+        Object.keys(r).forEach(id => {
+            if (!r[id].fired && r[id].t <= Date.now()) { r[id].fired = true; dirty = true; fireReminder(id, r[id]); }
+        });
+        if (dirty) zdSaveRems(r);
+    }, 20000);
 
     /* ============================================================
        V4.0 — APP DOWNLOADS, SNOOZABLE REMINDERS, SW MESSAGING
