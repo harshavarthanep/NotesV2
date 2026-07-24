@@ -8546,6 +8546,129 @@ try {
     );
 } catch (e) {}
 setTimeout(applyFeatureFlags, 600);        
+
+    // New code
+
+    /* ============================================================
+   V4.5 — UI POLISH PATCH (requires V4.1–V4.4)
+   A) Mobile: focus pill sits above the bottom toolbar + keyboard
+   B) Desktop: "More tools" menu grouped into sections, capped
+      height with a slim scroll, wider + cleaner
+============================================================ */
+
+/* ---------- A) FOCUS PILL vs BOTTOM TOOLBAR ---------- */
+document.head.insertAdjacentHTML('beforeend', `<style>
+/* Mobile: lift the pill clear of the bottom-docked toolbar (and the
+   keyboard, via the same --keyboard-offset the toolbar uses). */
+@media (max-width: 850px) {
+    #pomo-pill { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 12px; padding: 7px 12px; font-size: 11px; }
+    body.toolbar-bottom #pomo-pill { bottom: calc(84px + var(--keyboard-offset, 0px) + env(safe-area-inset-bottom, 0px)); }
+    /* keep it below open sheets/menus but above the editor + toolbar */
+    #pomo-pill { z-index: 49; }
+}
+
+/* ---------- B) MORE-TOOLS MENU RESTRUCTURE (desktop) ---------- */
+#more-menu { width: 240px !important; padding: 0 !important; overflow: hidden; }
+#more-menu-scroll { max-height: min(62vh, 480px); overflow-y: auto; overscroll-behavior: contain; padding: 6px 0; scrollbar-width: thin; scrollbar-color: rgba(140,140,150,0.45) transparent; }
+#more-menu-scroll::-webkit-scrollbar { width: 5px; }
+#more-menu-scroll::-webkit-scrollbar-thumb { background: rgba(140,140,150,0.45); border-radius: 99px; }
+#more-menu-scroll::-webkit-scrollbar-track { background: transparent; }
+.zd-mgroup { padding: 7px 14px 3px; font-size: 8.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #9ca3af; user-select: none; display: flex; align-items: center; gap: 6px; }
+.zd-mgroup::after { content: ''; flex: 1; height: 1px; background: var(--border-color); opacity: .7; }
+.zd-mgroup:first-child { padding-top: 4px; }
+#more-menu .zd-mi { padding: 7px 14px; font-size: 12.5px; }
+#more-menu .zd-mi svg { flex-shrink: 0; opacity: .75; }
+#more-menu .zd-mi:hover svg { opacity: 1; color: rgb(var(--accent-rgb)); }
+/* zoom row: the two zoom actions share one compact line */
+.zd-mzoom { display: flex; align-items: center; justify-content: space-between; padding: 7px 14px; }
+.zd-mzoom > span { font-size: 12.5px; color: var(--text-color); display: flex; align-items: center; gap: 10px; }
+.zd-mzoom > span svg { opacity: .75; }
+.zd-mzoom .zd-mzbtns { display: flex; gap: 4px; }
+.zd-mzoom .zd-mzb { width: 26px; height: 24px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); font-size: 12px; font-weight: 700; line-height: 1; transition: border-color .15s ease; }
+.zd-mzoom .zd-mzb:hover { border-color: rgb(var(--accent-rgb)); color: rgb(var(--accent-rgb)); }
+.zd-mzoom .zd-mzb:active { transform: scale(.9); }
+</style>`);
+
+/* ---------- B) reorganize the #more-menu DOM once at load ----------
+   Buttons are MOVED (not recreated), so every existing onclick,
+   data-zdfn feature tag, and future applyFeatureFlags() call keeps
+   working exactly as before. Unmatched/unknown buttons (from any
+   future patch) automatically land in "More". */
+(function zdRestructureMoreMenu() {
+    const menu = document.getElementById('more-menu');
+    if (!menu || document.getElementById('more-menu-scroll')) return;
+
+    /* label → group mapping (labels as rendered by V3.8–V4.4) */
+    const GROUPS = [
+        { name: 'Note tools', labels: ['Local AI summary', 'Study mode', 'Read aloud', 'Reference panel'] },
+        { name: 'History & safety', labels: ['Version history', 'Time machine', 'Trash', 'Encrypted vault', 'Backup & restore'] },
+        { name: 'Organize & time', labels: ['Deep Think map', 'Remind me…', 'Remind me\u2026', 'Focus timer'] },
+        { name: 'Share & import', labels: ['Publish as webpage', 'Web clipper', 'Import notes (md/csv)'] }
+    ];
+
+    /* collect current items; pull the two zoom buttons aside */
+    const items = Array.from(menu.children).filter(el => el.tagName === 'BUTTON');
+    const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+    let zoomIn = null, zoomOut = null;
+    const pool = [];
+    items.forEach(b => {
+        const t = norm(b.textContent);
+        if (t === 'Zoom in') { zoomIn = b; return; }
+        if (t === 'Zoom out') { zoomOut = b; return; }
+        pool.push(b);
+    });
+
+    /* rebuild inside a scroll container */
+    menu.innerHTML = '';
+    const scroll = document.createElement('div');
+    scroll.id = 'more-menu-scroll';
+    menu.appendChild(scroll);
+
+    const used = new Set();
+    const addGroup = (name, btns) => {
+        if (!btns.length) return;
+        const h = document.createElement('div');
+        h.className = 'zd-mgroup';
+        h.textContent = name;
+        scroll.appendChild(h);
+        btns.forEach(b => scroll.appendChild(b));
+    };
+
+    /* VIEW group is built first: a compact zoom row */
+    if (zoomIn && zoomOut) {
+        const h = document.createElement('div');
+        h.className = 'zd-mgroup';
+        h.textContent = 'View';
+        scroll.appendChild(h);
+        const row = document.createElement('div');
+        row.className = 'zd-mzoom';
+        row.innerHTML = `<span><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg> Editor zoom</span>
+            <span class="zd-mzbtns">
+                <button class="zd-mzb" title="Zoom out">−</button>
+                <button class="zd-mzb" title="Reset zoom">1×</button>
+                <button class="zd-mzb" title="Zoom in">+</button>
+            </span>`;
+        const [bOut, bReset, bIn] = row.querySelectorAll('.zd-mzb');
+        bOut.onclick = (e) => { e.stopPropagation(); zoomEditor(-1); };
+        bReset.onclick = (e) => { e.stopPropagation(); zoomEditor(0); };
+        bIn.onclick = (e) => { e.stopPropagation(); zoomEditor(1); };
+        scroll.appendChild(row);
+    }
+
+    /* named groups */
+    GROUPS.forEach(g => {
+        const btns = [];
+        g.labels.forEach(lab => {
+            pool.forEach(b => {
+                if (!used.has(b) && norm(b.textContent) === norm(lab)) { used.add(b); btns.push(b); }
+            });
+        });
+        addGroup(g.name, btns);
+    });
+
+    /* anything unmatched (future patches) falls into "More" */
+    addGroup('More', pool.filter(b => !used.has(b)));
+})();    
         
     /* ============================================================
        INIT
