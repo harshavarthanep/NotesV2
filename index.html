@@ -9189,6 +9189,330 @@ const ZD46_HOSTS = '.zd-cmodal, .zd-view-modal, #sidebar, #comments-panel, #ref-
 
 /* ---------- apply everything ---------- */
 setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);    
+
+    // New Code
+
+    /* ============================================================
+   V4.7 — PREMIUM AUTH SCREEN
+   Distinct Sign in / Create account tabs · inline reset pane ·
+   human error messages with recovery actions · app logo ·
+   show/hide password · strength meter · Caps-Lock hint.
+   Rebuilds #auth-screen and rebinds every handler. The old
+   #reset-modal stays in the page but is no longer used.
+============================================================ */
+(function zd47Auth() {
+    const screen = document.getElementById('auth-screen');
+    if (!screen || screen.dataset.zd47) return;
+    screen.dataset.zd47 = '1';
+    screen.classList.add('zd-auth');
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    #auth-screen.zd-auth { background:#0e1014 !important; padding:18px !important; overflow-y:auto; align-items:center; }
+    #auth-screen.zd-auth::before { content:''; position:absolute; inset:0; pointer-events:none;
+        background:radial-gradient(820px 460px at 12% 18%, rgb(var(--accent-rgb) / 0.22), transparent 62%),
+                   radial-gradient(680px 420px at 88% 88%, rgb(var(--accent-rgb) / 0.14), transparent 60%),
+                   linear-gradient(180deg, rgba(255,255,255,.03), transparent 40%); }
+    #auth-screen.zd-auth::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:.35;
+        background-image:linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+        background-size:46px 46px; mask-image:radial-gradient(circle at 50% 40%, #000 30%, transparent 78%); -webkit-mask-image:radial-gradient(circle at 50% 40%, #000 30%, transparent 78%); }
+    .zda-wrap { position:relative; z-index:2; width:100%; max-width:880px; margin:auto; display:grid; grid-template-columns:1fr; gap:0;
+        border-radius:26px; overflow:hidden; border:1px solid rgba(255,255,255,.09); box-shadow:0 34px 80px rgba(0,0,0,.55); }
+    @media (min-width:860px) { .zda-wrap { grid-template-columns:1.05fr .95fr; } }
+    .zda-brand { display:none; padding:38px 34px; color:#fff; position:relative; background:#14161c; }
+    @media (min-width:860px) { .zda-brand { display:flex; flex-direction:column; } }
+    .zda-brand::before { content:''; position:absolute; inset:0; opacity:.92; background-image:var(--zd-grad); }
+    .zda-brand::after { content:''; position:absolute; inset:0; background:linear-gradient(160deg, rgba(0,0,0,.12), rgba(0,0,0,.55)); }
+    .zda-brand > * { position:relative; z-index:2; }
+    .zda-logo { width:46px; height:46px; border-radius:13px; box-shadow:0 8px 22px rgba(0,0,0,.35); background:rgba(255,255,255,.16); display:flex; align-items:center; justify-content:center; }
+    .zda-logo img { width:46px; height:46px; border-radius:13px; display:block; }
+    .zda-feat { display:flex; gap:11px; align-items:flex-start; margin-top:14px; }
+    .zda-feat svg { width:16px; height:16px; flex-shrink:0; margin-top:2px; opacity:.95; }
+    .zda-card { background:rgba(20,22,28,.86); backdrop-filter:blur(20px); padding:30px 26px; }
+    @media (min-width:860px) { .zda-card { padding:36px 34px; } }
+    .zda-seg { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; border-radius:14px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.07); margin-bottom:20px; }
+    .zda-seg button { padding:9px 0; border-radius:11px; font-size:12.5px; font-weight:700; color:#9ca3af; transition:color .18s ease, background .18s ease, box-shadow .18s ease; }
+    .zda-seg button:hover { color:#e5e7eb; }
+    .zda-seg button.on { color:#fff; background-image:var(--zd-grad); box-shadow:0 6px 16px rgba(0,0,0,.35); }
+    .zda-lab { display:block; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#8b93a1; margin-bottom:6px; }
+    .zda-field { position:relative; margin-bottom:13px; }
+    .zda-in { width:100%; background:rgba(255,255,255,.045); border:1.5px solid rgba(255,255,255,.10); border-radius:13px;
+        padding:12px 42px 12px 40px; font-size:14px; color:#f3f4f6; outline:none; transition:border-color .18s ease, background .18s ease; caret-color:rgb(var(--accent-rgb)); }
+    .zda-in::placeholder { color:#6b7280; }
+    .zda-in:focus { border-color:rgb(var(--accent-rgb)); background:rgba(255,255,255,.07); }
+    .zda-field.bad .zda-in { border-color:#f87171; }
+    .zda-ico { position:absolute; left:13px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:#6b7280; pointer-events:none; }
+    .zda-field:focus-within .zda-ico { color:rgb(var(--accent-rgb)); }
+    .zda-eye { position:absolute; right:9px; top:50%; transform:translateY(-50%); width:28px; height:28px; border-radius:99px; color:#8b93a1; display:flex; align-items:center; justify-content:center; }
+    .zda-eye:hover { color:#fff; background:rgba(255,255,255,.09); }
+    .zda-hint { font-size:10.5px; color:#f87171; margin:-8px 0 10px 2px; min-height:0; }
+    .zda-btn { width:100%; padding:12.5px 0; border-radius:14px; font-size:13.5px; font-weight:800; color:#fff;
+        background-image:var(--zd-grad); box-shadow:0 10px 26px rgba(0,0,0,.4); transition:transform .12s ease, filter .18s ease; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .zda-btn:hover { filter:brightness(1.08); } .zda-btn:active { transform:scale(.985); }
+    .zda-btn[disabled] { opacity:.65; pointer-events:none; }
+    .zda-msg { display:none; gap:9px; padding:11px 12px; border-radius:13px; font-size:12px; line-height:1.45; margin-bottom:14px; align-items:flex-start; }
+    .zda-msg.show { display:flex; animation:fadeIn .2s ease-out; }
+    .zda-msg.err { background:rgba(248,113,113,.11); border:1px solid rgba(248,113,113,.3); color:#fca5a5; }
+    .zda-msg.ok { background:rgba(52,211,153,.11); border:1px solid rgba(52,211,153,.3); color:#6ee7b7; }
+    .zda-msg svg { width:15px; height:15px; flex-shrink:0; margin-top:1px; }
+    .zda-msg button { font-weight:800; text-decoration:underline; color:inherit; }
+    .zda-bars { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin:-6px 0 5px; }
+    .zda-bars i { height:3px; border-radius:99px; background:rgba(255,255,255,.12); transition:background .2s ease; }
+    .zda-strength { font-size:10px; color:#8b93a1; margin-bottom:11px; }
+    .zda-link { font-size:12px; color:rgb(var(--accent-rgb)); font-weight:600; }
+    .zda-link:hover { text-decoration:underline; }
+    .zda-foot { margin-top:18px; padding-top:15px; border-top:1px solid rgba(255,255,255,.08); font-size:11px; color:#7b8494; text-align:center; line-height:1.6; }
+    .zda-caps { display:none; font-size:10.5px; color:#fbbf24; margin:-8px 0 10px 2px; }
+    .zda-caps.show { display:block; }
+    .zda-mlogo { display:flex; align-items:center; gap:11px; margin-bottom:20px; }
+    @media (min-width:860px) { .zda-mlogo { display:none; } }
+    .zda-mlogo img { width:38px; height:38px; border-radius:11px; }
+    </style>`);
+
+    const LOGO = `<img src="./icon-192.png" alt="ZenDocs" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'<svg viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' style=\\'width:22px;height:22px;color:#fff\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' d=\\'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.4-9.4a2 2 0 112.8 2.8L11 15l-4 1 1-4 9.6-9.4z\\'/></svg>'}))">`;
+    const IC = {
+        mail: '<svg class="zda-ico" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path stroke-linecap="round" d="M3.5 7l8.5 6 8.5-6"/></svg>',
+        lock: '<svg class="zda-ico" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 018 0v4"/></svg>',
+        check: '<svg class="zda-ico" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>',
+        eye: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.4 12C3.7 7.9 7.5 5 12 5s8.3 2.9 9.6 7c-1.3 4.1-5.1 7-9.6 7s-8.3-2.9-9.6-7z"/></svg>',
+        eyeOff: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.6 10.6a3 3 0 004.2 4.2M9.9 5.2A9.8 9.8 0 0112 5c4.5 0 8.3 2.9 9.6 7a11 11 0 01-2.4 3.6M6.2 6.6A11 11 0 002.4 12c1.3 4.1 5.1 7 9.6 7 1.2 0 2.3-.2 3.4-.6"/></svg>',
+        warn: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.5m0 3.5h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>',
+        ok: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
+    };
+    const pwField = (id, ph, ac) => `<div class="zda-field" data-f="${id}">${IC.lock}
+        <input id="${id}" type="password" class="zda-in" placeholder="${ph}" autocomplete="${ac}" spellcheck="false">
+        <button type="button" class="zda-eye" data-eye="${id}" title="Show password">${IC.eye}</button></div>`;
+
+    screen.innerHTML = `
+    <div class="zda-wrap">
+      <aside class="zda-brand">
+        <div class="flex items-center gap-3">
+          <span class="zda-logo">${LOGO}</span>
+          <span><span class="block text-xl font-light leading-tight">Zen<b class="font-bold">Docs</b></span>
+          <span class="block text-[10px] uppercase tracking-[.16em] opacity-80">Professional cloud editor</span></span>
+        </div>
+        <div class="mt-8 text-[22px] font-semibold leading-snug">Think clearly.<br>Write beautifully.</div>
+        <div class="mt-1.5 text-[12.5px] opacity-85 leading-relaxed">Notes, tasks, graphs and daily planning — synced across every device.</div>
+        <div class="mt-6">
+          <div class="zda-feat"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-10 5 5 0 10-9.8 2A4 4 0 003 15z"/></svg><span class="text-[12px] leading-snug"><b>Autosave &amp; offline</b><br><span class="opacity-80">Every keystroke kept safe.</span></span></div>
+          <div class="zda-feat"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="8" r="2.4"/><circle cx="9" cy="18" r="2.4"/><path stroke-linecap="round" d="M8.2 6.7l7.4 1M6.9 8.2l1.6 7.4M16.3 9.9l-5.6 6.3"/></svg><span class="text-[12px] leading-snug"><b>Linked thinking</b><br><span class="opacity-80">#tags, [[links]] and a live graph.</span></span></div>
+          <div class="zda-feat"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span class="text-[12px] leading-snug"><b>Plan &amp; focus</b><br><span class="opacity-80">Matrix, board, calendar, timer.</span></span></div>
+        </div>
+        <div class="mt-auto pt-7 text-[10px] opacity-70">Made with love ❤️ by Harsha Varthan E P</div>
+      </aside>
+
+      <div id="auth-box" class="zda-card opacity-0 transform transition-all duration-500">
+        <div class="zda-mlogo"><span class="zda-logo" style="width:38px;height:38px;border-radius:11px">${LOGO}</span>
+          <span><span class="block text-lg font-light text-white leading-tight">Zen<b class="font-bold">Docs</b></span>
+          <span class="block text-[9px] uppercase tracking-[.14em] text-gray-500">Professional cloud editor</span></span></div>
+
+        <div class="zda-seg" role="tablist">
+          <button id="zda-tab-in" type="button" onclick="zdAuthTab('signin')">Sign in</button>
+          <button id="zda-tab-up" type="button" onclick="zdAuthTab('signup')">Create account</button>
+        </div>
+
+        <div id="zda-msg" class="zda-msg"><span id="zda-msg-ico"></span><span id="zda-msg-txt" class="flex-1"></span></div>
+
+        <!-- SIGN IN -->
+        <form id="zda-p-signin" novalidate>
+          <h2 class="text-[17px] font-bold text-white mb-0.5">Welcome back</h2>
+          <p class="text-[11.5px] text-gray-500 mb-5">Sign in to your existing ZenDocs account.</p>
+          <span class="zda-lab">Email</span>
+          <div class="zda-field" data-f="zda-in-email">${IC.mail}<input id="zda-in-email" type="email" class="zda-in" placeholder="you@example.com" autocomplete="username" spellcheck="false"></div>
+          <span class="zda-lab">Password</span>
+          ${pwField('zda-in-pass', 'Your password', 'current-password')}
+          <div id="zda-caps-in" class="zda-caps">⚠ Caps Lock is on.</div>
+          <div class="flex justify-end mb-4"><button type="button" class="zda-link" onclick="zdAuthTab('reset')">Forgot password?</button></div>
+          <button type="submit" id="zda-btn-in" class="zda-btn">Sign in</button>
+          <p class="text-center text-[11.5px] text-gray-500 mt-4">New to ZenDocs? <button type="button" class="zda-link" onclick="zdAuthTab('signup')">Create a free account</button></p>
+        </form>
+
+        <!-- SIGN UP -->
+        <form id="zda-p-signup" novalidate style="display:none">
+          <h2 class="text-[17px] font-bold text-white mb-0.5">Create your account</h2>
+          <p class="text-[11.5px] text-gray-500 mb-5">Free, private, and ready in seconds.</p>
+          <span class="zda-lab">Email</span>
+          <div class="zda-field" data-f="zda-up-email">${IC.mail}<input id="zda-up-email" type="email" class="zda-in" placeholder="you@example.com" autocomplete="username" spellcheck="false"></div>
+          <span class="zda-lab">Create password</span>
+          ${pwField('zda-up-pass', 'At least 6 characters', 'new-password')}
+          <div class="zda-bars"><i></i><i></i><i></i><i></i></div>
+          <div id="zda-strength" class="zda-strength">Use 8+ characters with a number for a strong password.</div>
+          <span class="zda-lab">Confirm password</span>
+          <div class="zda-field" data-f="zda-up-pass2">${IC.check}<input id="zda-up-pass2" type="password" class="zda-in" placeholder="Repeat your password" autocomplete="new-password" spellcheck="false"></div>
+          <div id="zda-caps-up" class="zda-caps">⚠ Caps Lock is on.</div>
+          <button type="submit" id="zda-btn-up" class="zda-btn mt-1">Create account</button>
+          <p class="text-center text-[11.5px] text-gray-500 mt-4">Already registered? <button type="button" class="zda-link" onclick="zdAuthTab('signin')">Sign in instead</button></p>
+        </form>
+
+        <!-- RESET -->
+        <form id="zda-p-reset" novalidate style="display:none">
+          <h2 class="text-[17px] font-bold text-white mb-0.5">Reset your password</h2>
+          <p class="text-[11.5px] text-gray-500 mb-5">We'll email you a secure link to choose a new one.</p>
+          <span class="zda-lab">Account email</span>
+          <div class="zda-field" data-f="zda-rs-email">${IC.mail}<input id="zda-rs-email" type="email" class="zda-in" placeholder="you@example.com" autocomplete="username" spellcheck="false"></div>
+          <button type="submit" id="zda-btn-rs" class="zda-btn mt-1">Send reset link</button>
+          <p class="text-center text-[11.5px] text-gray-500 mt-4"><button type="button" class="zda-link" onclick="zdAuthTab('signin')">← Back to sign in</button></p>
+        </form>
+
+        <div id="auth-cancel-container" class="hidden text-center mt-4">
+          <button type="button" onclick="closeLoginForGuest()" class="text-[11.5px] text-gray-500 hover:text-white transition">Cancel &amp; return to the shared note</button>
+        </div>
+        <span id="auth-error" class="hidden"></span>
+        <div class="zda-foot">Your notes stay private to your account.<br>By continuing you agree to use ZenDocs responsibly.</div>
+      </div>
+    </div>`;
+
+    /* keep global refs pointing at the new nodes */
+    els.authBox = document.getElementById('auth-box');
+    els.authCancelContainer = document.getElementById('auth-cancel-container');
+    els.email = document.getElementById('zda-in-email');
+    els.pass = document.getElementById('zda-in-pass');
+    els.authError = document.getElementById('auth-error');
+
+    const $ = id => document.getElementById(id);
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+
+    function msg(kind, text, action) {
+        const box = $('zda-msg');
+        $('zda-msg-ico').innerHTML = kind === 'ok' ? IC.ok : IC.warn;
+        $('zda-msg-txt').innerHTML = text + (action ? ' <button type="button" data-act="' + action.k + '">' + action.t + '</button>' : '');
+        box.className = 'zda-msg show ' + (kind === 'ok' ? 'ok' : 'err');
+        const b = $('zda-msg-txt').querySelector('button');
+        if (b) b.onclick = action.run;
+    }
+    function clearMsg() { $('zda-msg').className = 'zda-msg'; document.querySelectorAll('.zda-field.bad').forEach(f => f.classList.remove('bad')); }
+    function bad(id) { const f = document.querySelector('.zda-field[data-f="' + id + '"]'); if (f) f.classList.add('bad'); const el = $(id); if (el) { try { el.focus({ preventScroll: true }); } catch (e) {} } }
+    function busy(btn, on, label) {
+        btn.disabled = on;
+        btn.innerHTML = on ? '<svg class="animate-spin" style="width:15px;height:15px" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.6"><path stroke-linecap="round" d="M12 3a9 9 0 019 9"/></svg> Please wait…' : label;
+    }
+
+    window.zdAuthTab = (t) => {
+        clearMsg();
+        const map = { signin: 'zda-p-signin', signup: 'zda-p-signup', reset: 'zda-p-reset' };
+        Object.keys(map).forEach(k => { $(map[k]).style.display = k === t ? '' : 'none'; });
+        $('zda-tab-in').classList.toggle('on', t === 'signin');
+        $('zda-tab-up').classList.toggle('on', t === 'signup');
+        /* carry the typed email across tabs so nothing is retyped */
+        const carry = ($('zda-in-email').value || $('zda-up-email').value || $('zda-rs-email').value || '').trim();
+        if (carry) { $('zda-in-email').value = carry; $('zda-up-email').value = carry; $('zda-rs-email').value = carry; }
+        const first = { signin: 'zda-in-email', signup: 'zda-up-email', reset: 'zda-rs-email' }[t];
+        if (window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+            setTimeout(() => { try { $(first).focus({ preventScroll: true }); } catch (e) {} }, 80);
+        }
+    };
+    window.showResetModal = () => zdAuthTab('reset'); /* the old modal is retired */
+
+    /* eye toggles */
+    screen.querySelectorAll('[data-eye]').forEach(b => {
+        b.onclick = () => {
+            const i = $(b.dataset.eye);
+            const show = i.type === 'password';
+            i.type = show ? 'text' : 'password';
+            b.innerHTML = show ? IC.eyeOff : IC.eye;
+            b.title = show ? 'Hide password' : 'Show password';
+            try { i.focus({ preventScroll: true }); } catch (e) {}
+        };
+    });
+    /* Caps Lock hints */
+    [['zda-in-pass', 'zda-caps-in'], ['zda-up-pass', 'zda-caps-up']].forEach(([p, c]) => {
+        $(p).addEventListener('keyup', e => { try { $(c).classList.toggle('show', e.getModifierState && e.getModifierState('CapsLock')); } catch (err) {} });
+    });
+    /* strength meter */
+    $('zda-up-pass').addEventListener('input', () => {
+        const v = $('zda-up-pass').value;
+        let s = 0;
+        if (v.length >= 6) s++;
+        if (v.length >= 10) s++;
+        if (/[A-Z]/.test(v) && /[a-z]/.test(v)) s++;
+        if (/\d/.test(v) || /[^\w\s]/.test(v)) s++;
+        const cols = ['#f87171', '#fbbf24', '#60a5fa', '#34d399'];
+        const names = ['Too weak', 'Weak', 'Good', 'Strong'];
+        document.querySelectorAll('.zda-bars i').forEach((bar, i) => { bar.style.background = (v && i < s) ? cols[Math.max(0, s - 1)] : 'rgba(255,255,255,.12)'; });
+        $('zda-strength').textContent = v ? (names[Math.max(0, s - 1)] + ' password' + (s < 3 ? ' — add length, a capital or a number.' : '.')) : 'Use 8+ characters with a number for a strong password.';
+    });
+    /* protect the caret from the editor (V4.4/V4.6 guards) */
+    screen.querySelectorAll('input').forEach(i => {
+        i.addEventListener('focusin', () => { try { zdArmProtect(i); } catch (e) {} });
+        i.addEventListener('input', () => { clearMsg(); try { zdArmProtect(i); } catch (e) {} });
+    });
+
+    function friendly(e, mode) {
+        const c = (e && e.code) || '';
+        switch (c) {
+            case 'auth/invalid-email': return { m: 'That email address doesn\u2019t look right — check for typos.', f: mode === 'signup' ? 'zda-up-email' : (mode === 'reset' ? 'zda-rs-email' : 'zda-in-email') };
+            case 'auth/missing-password': return { m: 'Please enter your password.', f: mode === 'signup' ? 'zda-up-pass' : 'zda-in-pass' };
+            case 'auth/user-disabled': return { m: 'This account has been disabled.' };
+            case 'auth/user-not-found': return { m: 'No ZenDocs account uses this email yet.', act: { k: 'up', t: 'Create one now', run: () => zdAuthTab('signup') } };
+            case 'auth/wrong-password':
+            case 'auth/invalid-credential':
+            case 'auth/invalid-login-credentials': return { m: 'Incorrect email or password.', f: 'zda-in-pass', act: { k: 'rs', t: 'Reset password', run: () => zdAuthTab('reset') } };
+            case 'auth/too-many-requests': return { m: 'Too many attempts — wait a few minutes.', act: { k: 'rs', t: 'Reset password instead', run: () => zdAuthTab('reset') } };
+            case 'auth/email-already-in-use': return { m: 'An account already exists with this email.', act: { k: 'in', t: 'Sign in instead', run: () => zdAuthTab('signin') } };
+            case 'auth/weak-password': return { m: 'Password too weak — use at least 6 characters.', f: 'zda-up-pass' };
+            case 'auth/network-request-failed': return { m: 'Network problem — check your connection and try again.' };
+            case 'auth/operation-not-allowed': return { m: 'Email sign-in isn\u2019t enabled for this project.' };
+            case 'auth/missing-email': return { m: 'Please enter your email address.' };
+            default: return { m: (e && e.message) ? String(e.message).replace(/^Firebase:\s*/, '').replace(/\s*\(auth\/[^)]+\)\.?\s*$/, '') : 'Something went wrong. Please try again.' };
+        }
+    }
+
+    /* SIGN IN */
+    $('zda-p-signin').onsubmit = async (ev) => {
+        ev.preventDefault(); clearMsg();
+        const email = $('zda-in-email').value.trim(), pass = $('zda-in-pass').value;
+        if (!EMAIL_RE.test(email)) { msg('err', 'Enter a valid email address.'); bad('zda-in-email'); return; }
+        if (!pass) { msg('err', 'Enter your password.'); bad('zda-in-pass'); return; }
+        const btn = $('zda-btn-in'); busy(btn, true);
+        try {
+            await auth.signInWithEmailAndPassword(email, pass);
+            localStorage.setItem('zdLastEmail', email);
+            msg('ok', 'Signed in — loading your workspace…');
+        } catch (e) {
+            const f = friendly(e, 'signin');
+            msg('err', f.m, f.act); if (f.f) bad(f.f);
+            busy(btn, false, 'Sign in');
+        }
+    };
+    /* SIGN UP */
+    $('zda-p-signup').onsubmit = async (ev) => {
+        ev.preventDefault(); clearMsg();
+        const email = $('zda-up-email').value.trim(), p1 = $('zda-up-pass').value, p2 = $('zda-up-pass2').value;
+        if (!EMAIL_RE.test(email)) { msg('err', 'Enter a valid email address so you can recover your account.'); bad('zda-up-email'); return; }
+        if (p1.length < 6) { msg('err', 'Choose a password with at least 6 characters.'); bad('zda-up-pass'); return; }
+        if (p1 !== p2) { msg('err', 'The two passwords don\u2019t match.'); bad('zda-up-pass2'); return; }
+        const btn = $('zda-btn-up'); busy(btn, true);
+        try {
+            await auth.createUserWithEmailAndPassword(email, p1);
+            localStorage.setItem('zdLastEmail', email);
+            msg('ok', 'Account created — setting up your workspace…');
+        } catch (e) {
+            const f = friendly(e, 'signup');
+            msg('err', f.m, f.act); if (f.f) bad(f.f);
+            busy(btn, false, 'Create account');
+        }
+    };
+    /* RESET */
+    $('zda-p-reset').onsubmit = async (ev) => {
+        ev.preventDefault(); clearMsg();
+        const email = $('zda-rs-email').value.trim();
+        if (!EMAIL_RE.test(email)) { msg('err', 'Enter the email address of your account.'); bad('zda-rs-email'); return; }
+        const btn = $('zda-btn-rs'); busy(btn, true);
+        try {
+            await auth.sendPasswordResetEmail(email);
+            msg('ok', 'Reset link sent to <b>' + escapeHtml(email) + '</b>. Check your inbox (and spam folder), then sign in with your new password.');
+            busy(btn, false, 'Send reset link');
+        } catch (e) {
+            const f = friendly(e, 'reset');
+            msg('err', f.m, f.act); if (f.f) bad(f.f);
+            busy(btn, false, 'Send reset link');
+        }
+    };
+
+    /* start on Sign in, prefilled with the last email used here */
+    zdAuthTab('signin');
+    const last = localStorage.getItem('zdLastEmail');
+    if (last) { $('zda-in-email').value = last; $('zda-up-email').value = last; $('zda-rs-email').value = last; }
+})();    
         
     /* ============================================================
        INIT
