@@ -9706,6 +9706,54 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         if (modal.classList.contains('open')) { try { renderCalMonthNotes(); } catch (e) {} }
     };
 })();
+
+// New Code
+
+/* ============================================================
+   V4.9 — CALENDAR LAYOUT FIX
+   • Restores the month grid to its original size (V4.8 turned the
+     scroll container into a flex column, which let the grid shrink)
+   • Rebuilds the "Notes this month" filter bar for mobile:
+     search on its own full-width row, compact sort + direction row
+============================================================ */
+document.head.insertAdjacentHTML('beforeend', `<style>
+/* --- 1. undo the flex container so the grid keeps its natural size --- */
+#cal-scroll { display:block !important; }
+#cal-grid { flex-shrink:0 !important; }
+
+/* --- 2. filter bar: desktop stays one line, mobile stacks cleanly --- */
+#cm-panel { margin-top:16px; }
+#cm-bar { display:grid; gap:7px; align-items:center;
+    grid-template-columns:auto minmax(0,1fr) auto auto; }
+#cm-title { white-space:nowrap; }
+#cm-search { width:100%; min-width:0; }
+#cm-sort { max-width:150px; }
+
+@media (max-width:850px) {
+    #cm-bar { grid-template-columns:1fr auto; gap:8px 8px; }
+    #cm-title { grid-column:1; grid-row:1; font-size:10px; }
+    #cm-search { grid-column:1 / -1; grid-row:2; font-size:16px; padding:9px 12px; border-radius:12px; }
+    #cm-sort { grid-column:1; grid-row:3; width:100%; max-width:none; font-size:13px; padding:8px 10px; border-radius:12px; }
+    #cm-dir { grid-column:2; grid-row:3; width:38px; height:38px; font-size:14px; border-radius:12px; }
+    #cm-list { max-height:min(34vh,300px); }
+    .cm-row { padding:9px 5px; }
+    .cm-ib { width:30px; height:30px; }
+}
+/* very narrow phones: keep everything readable */
+@media (max-width:380px) {
+    #cm-sort { font-size:12px; }
+    #cm-title { font-size:9.5px; }
+}
+</style>`);
+/* shorter placeholder on small screens so the text is never clipped */
+(function () {
+    const s = document.getElementById('cm-search');
+    if (!s) return;
+    const setPh = () => { s.placeholder = window.innerWidth < 850 ? 'Search this month…' : 'Filter by title or text…'; };
+    setPh();
+    window.addEventListener('resize', setPh);
+})();
+        
     
 
         
