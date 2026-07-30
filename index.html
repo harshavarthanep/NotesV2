@@ -9926,7 +9926,307 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         return r;
     };
     setTimeout(applyFeatureFlags, 300);
-})();   
+})();  
+
+    // New Code
+
+    /* ============================================================
+   V5.1 — PREMIUM SHARED (GUEST) VIEW
+   Locked download · copy/print blocked with toasts · slow login
+   nudge · unlockable sidebar panel · premium banner · working
+   caret in title + outline · Back returns to the shared note ·
+   screenshot deterrence. All guest-only.
+============================================================ */
+(function zd51Guest() {
+    if (window.__zd51) return; window.__zd51 = true;
+    const SITE = 'https://harshavarthanep.github.io/NotesV2/site/';
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ---- premium banner ---- */
+    body.zd-guest #preview-banner { background:transparent !important; padding:0 !important; box-shadow:none !important; display:block !important; }
+    .gv-bar { position:relative; display:flex; align-items:center; gap:12px; padding:9px 14px; color:#fff; overflow:hidden; background-image:var(--zd-grad); }
+    .gv-bar::after { content:''; position:absolute; inset:0; background:linear-gradient(120deg, rgba(255,255,255,.16), transparent 45%, rgba(0,0,0,.22)); pointer-events:none; }
+    .gv-bar > * { position:relative; z-index:2; }
+    .gv-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.26); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; backdrop-filter:blur(6px); }
+    .gv-dot { width:6px; height:6px; border-radius:99px; background:#6ee7b7; box-shadow:0 0 0 3px rgba(110,231,183,.28); animation:offlinePulse 2.2s ease-in-out infinite; }
+    .gv-txt { min-width:0; flex:1; line-height:1.25; }
+    .gv-t1 { display:block; font-size:12.5px; font-weight:700; }
+    .gv-t2 { display:none; font-size:10px; opacity:.9; }
+    @media (min-width:640px) { .gv-t2 { display:block; } }
+    .gv-cta { display:inline-flex; align-items:center; gap:6px; padding:6px 13px; border-radius:99px; background:#fff; color:#111827; font-size:11.5px; font-weight:800; white-space:nowrap; box-shadow:0 4px 14px rgba(0,0,0,.25); transition:transform .12s ease; }
+    .gv-cta:active { transform:scale(.96); }
+    .gv-more { display:none; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:#fff; opacity:.92; border-bottom:1px dotted rgba(255,255,255,.6); white-space:nowrap; }
+    @media (min-width:760px) { .gv-more { display:inline-flex; } }
+    .gv-more:hover { opacity:1; }
+
+    /* ---- locked toolbar buttons ---- */
+    body.zd-guest .gv-lock { position:relative; }
+    body.zd-guest .gv-lock::after { content:''; position:absolute; right:1px; bottom:1px; width:11px; height:11px; border-radius:99px;
+        background:var(--surface-color) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='3'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 018 0v4'/%3E%3C/svg%3E") center/8px no-repeat; }
+
+    /* ---- no text selection / no drag for guests ---- */
+    body.zd-guest .ql-editor, body.zd-guest #paper-container { user-select:none !important; -webkit-user-select:none !important; -webkit-touch-callout:none; }
+    body.zd-guest .ql-editor img { pointer-events:none; }
+
+    /* ---- guest sidebar (locked workspace) ---- */
+    #gv-panel { position:fixed; inset:0; z-index:75; display:none; }
+    #gv-panel.open { display:block; animation:fadeIn .18s ease-out; }
+    #gv-panel .gv-scrim { position:absolute; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(3px); }
+    #gv-aside { position:absolute; left:0; top:0; bottom:0; width:min(296px,86vw); background:#1e1e1e; border-right:1px solid rgba(255,255,255,.08);
+        display:flex; flex-direction:column; overflow:hidden; transform:translateX(-100%); transition:transform .28s cubic-bezier(.4,0,.2,1); }
+    #gv-panel.open #gv-aside { transform:translateX(0); }
+    html:not(.dark) #gv-aside { background:#f7f2e7; border-right-color:#e7dfce; }
+    #gv-aside-head { padding:14px; height:64px; display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid; border-image:var(--zd-grad) 1; background:#252525; }
+    html:not(.dark) #gv-aside-head { background:#efe8d8; }
+    #gv-skel { position:absolute; inset:64px 0 0; padding:14px; filter:blur(5px); opacity:.5; pointer-events:none; }
+    .gv-sk { height:34px; border-radius:10px; background:rgba(127,127,127,.28); margin-bottom:9px; }
+    .gv-sk.s2 { width:78%; } .gv-sk.s3 { width:62%; } .gv-sk.s4 { width:88%; }
+    #gv-gate { position:absolute; inset:64px 0 0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:22px; gap:3px; }
+    #gv-gate .gv-ring { width:56px; height:56px; border-radius:99px; display:flex; align-items:center; justify-content:center; background-image:var(--zd-grad); box-shadow:0 10px 26px rgba(0,0,0,.4); margin-bottom:12px; }
+
+    /* ---- login nudge (offline-reminder style) ---- */
+    #gv-nudge { position:fixed; bottom:20px; right:14px; z-index:118; max-width:266px; display:none;
+        background:var(--surface-color); border:1px solid var(--border-color); border-radius:16px; padding:12px; box-shadow:0 18px 44px rgba(0,0,0,.3); }
+    #gv-nudge.show { display:block; animation:fadeInUp .45s cubic-bezier(.16,1,.3,1); }
+    @media (max-width:850px) { #gv-nudge { bottom:14px; left:14px; right:14px; max-width:none; } }
+
+    /* ---- screenshot / print deterrence (guests only) ---- */
+    body.zd-guest.gv-shield #paper-container { filter:blur(13px); transition:filter .1s ease; }
+    #gv-shield-msg { position:fixed; inset:0; z-index:96; display:none; align-items:center; justify-content:center; background:rgba(10,10,14,.55); backdrop-filter:blur(4px); }
+    body.zd-guest.gv-shield #gv-shield-msg { display:flex; }
+    @media print { body.zd-guest * { visibility:hidden !important; } body.zd-guest::after { visibility:visible !important; content:'This shared note is protected. Sign in to ZenDocs to export it.'; position:fixed; left:0; top:40%; width:100%; text-align:center; font:600 14px Inter,sans-serif; } }
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="gv-panel"><div class="gv-scrim"></div>
+      <aside id="gv-aside">
+        <div id="gv-aside-head">
+          <span class="font-bold tracking-wide text-lg" style="color:var(--text-color)">Zen<span class="text-accent">Docs</span></span>
+          <button id="gv-aside-x" class="w-8 h-8 rounded-full text-muted hover:text-danger text-xl leading-none active:scale-90">×</button>
+        </div>
+        <div id="gv-skel"><div class="gv-sk"></div><div class="gv-sk s2"></div><div class="gv-sk s3"></div><div class="gv-sk"></div><div class="gv-sk s4"></div><div class="gv-sk s2"></div><div class="gv-sk s3"></div></div>
+        <div id="gv-gate">
+          <span class="gv-ring"><svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 018 0v4"/></svg></span>
+          <div class="text-sm font-bold" style="color:var(--text-color)">Your workspace is locked</div>
+          <div class="text-[11px] leading-snug mb-3" style="color:#9ca3af">Sign in to get folders, #tags, the graph, daily notes, boards and offline sync — free.</div>
+          <button id="gv-gate-in" class="w-full py-2.5 text-xs font-bold rounded-xl text-white active:scale-[.98] transition" style="background-image:var(--zd-grad)">
+            <span class="inline-flex items-center justify-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h12M13 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/></svg> Sign in / Create account</span></button>
+          <a href="${SITE}" target="_blank" rel="noopener" class="w-full mt-1.5 py-2 text-[11px] font-semibold rounded-xl border border-border flex items-center justify-center gap-1.5" style="color:var(--text-color)">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18"/></svg> Explore ZenDocs</a>
+        </div>
+      </aside></div>
+
+    <div id="gv-nudge">
+      <div class="flex items-start gap-2.5">
+        <span class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center text-white" style="background-image:var(--zd-grad)">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.4-9.4a2 2 0 112.8 2.8L11 15l-4 1 1-4 9.6-9.4z"/></svg></span>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-bold text-text">Like what you see?</div>
+          <div class="text-[10.5px] text-muted leading-snug">Create a free account to save this note, edit it and build your own workspace.</div>
+          <div class="flex gap-1.5 mt-2">
+            <button id="gv-nudge-in" class="px-3 py-1.5 text-[11px] font-bold rounded-lg text-white active:scale-95 transition" style="background-image:var(--zd-grad)">Sign in — free</button>
+            <a href="${SITE}" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-[11px] font-semibold rounded-lg text-muted hover:text-accent transition">Learn more</a>
+          </div>
+        </div>
+        <button id="gv-nudge-x" class="text-muted hover:text-danger text-base leading-none flex-shrink-0 active:scale-90">×</button>
+      </div>
+    </div>
+
+    <div id="gv-shield-msg"><div class="text-center px-6">
+      <svg class="w-9 h-9 mx-auto text-white/90 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" d="M3 3l18 18"/></svg>
+      <div class="text-white text-sm font-bold">Content hidden</div>
+      <div class="text-white/70 text-[11px] mt-0.5">Return to this tab to keep reading.</div></div></div>`);
+
+    const $ = id => document.getElementById(id);
+    let strikes = 0, nudgeTimer = null, snoozed = 0;
+
+    /* ---------- login nudge ---------- */
+    function showNudge() {
+        if (!state.isGuest) return;
+        if (Date.now() < snoozed) return;
+        if ($('gv-nudge').classList.contains('show')) return;
+        $('gv-nudge').classList.add('show');
+    }
+    function hideNudge(snooze) {
+        $('gv-nudge').classList.remove('show');
+        if (snooze) { snoozed = Date.now() + 120000; setTimeout(showNudge, 125000); }
+    }
+    $('gv-nudge-x').onclick = () => hideNudge(true);
+    $('gv-nudge-in').onclick = () => { hideNudge(); openLoginForGuest(); };
+
+    /* ---------- blocked-action feedback ---------- */
+    function locked(what) {
+        strikes++;
+        showToast('🔒 ' + what + ' needs a free ZenDocs account.', 3200);
+        if (strikes >= 2) setTimeout(showNudge, 700);
+    }
+    window.zdGuestLocked = locked;
+
+    /* ---------- premium banner + guest chrome ---------- */
+    let applied = false;
+    function applyGuestUI() {
+        if (!state.isGuest || applied) return;
+        applied = true;
+        document.body.classList.add('zd-guest');
+
+        /* banner */
+        const b = els.previewBanner;
+        b.className = 'z-[70]';
+        b.innerHTML = `<div class="gv-bar">
+            <span class="gv-badge"><span class="gv-dot"></span>Live · Read-only</span>
+            <span class="gv-txt"><span class="gv-t1">You're viewing a shared note</span>
+            <span class="gv-t2">Editing, copying and exporting are locked — sign in free to save your own copy.</span></span>
+            <a class="gv-more" href="${SITE}" target="_blank" rel="noopener"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18"/></svg>What is ZenDocs?</a>
+            <button class="gv-cta" id="gv-bar-in"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>Save a copy</button></div>`;
+        b.classList.remove('hidden');
+        $('gv-bar-in').onclick = () => openLoginForGuest();
+
+        /* header: hamburger opens the locked workspace panel */
+        els.hamburgerBtn.classList.remove('hidden');
+        els.hamburgerBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); $('gv-panel').classList.add('open'); };
+        els.hamburgerBtn.title = 'Workspace (sign in to unlock)';
+
+        /* download stays visible but locked */
+        const dl = els.guestDownloadBtn;
+        if (dl) {
+            dl.classList.add('gv-lock');
+            dl.title = 'Download — sign in to unlock';
+            dl.onclick = (e) => { e.preventDefault(); locked('Downloading'); };
+        }
+
+        /* title: readonly (not disabled) so the caret shows and the outline works */
+        els.title.disabled = false;
+        els.title.readOnly = true;
+        els.title.title = 'Shared note title (read-only)';
+
+        /* keep the editor unfocusable so taps never trap the caret */
+        const ed = document.querySelector('.ql-editor');
+        if (ed) { ed.setAttribute('tabindex', '-1'); }
+
+        renderGuestOutline();
+    }
+    $('gv-aside-x').onclick = () => $('gv-panel').classList.remove('open');
+    $('gv-panel').querySelector('.gv-scrim').onclick = () => $('gv-panel').classList.remove('open');
+    $('gv-gate-in').onclick = () => { $('gv-panel').classList.remove('open'); openLoginForGuest(); };
+
+    /* run once the guest snapshot has loaded, then keep watching briefly */
+    const _zd51Load = window.loadGuestView;
+    if (typeof _zd51Load === 'function') {
+        window.loadGuestView = async function (id) {
+            const r = await _zd51Load(id);
+            [400, 1200, 2500].forEach(t => setTimeout(applyGuestUI, t));
+            nudgeTimer = setTimeout(showNudge, 50000); /* slow, unobtrusive first nudge */
+            return r;
+        };
+    }
+    const watcher = setInterval(() => {
+        if (state.isGuest) { applyGuestUI(); if (applied) clearInterval(watcher); }
+    }, 800);
+    setTimeout(() => clearInterval(watcher), 30000);
+
+    /* ---------- guest outline (state.docId is null for guests) ---------- */
+    function renderGuestOutline() {
+        const el = $('outline-list'); if (!el || !state.isGuest) return;
+        const q = (($('outline-search') || {}).value || '').trim().toLowerCase();
+        let items = [];
+        try {
+            quill.getLines(0, quill.getLength()).forEach(line => {
+                const f = line.formats ? line.formats() : {};
+                if (f.header) items.push({ lvl: f.header, txt: ((line.domNode && line.domNode.textContent) || '').trim() || '(untitled heading)', node: line.domNode });
+            });
+        } catch (e) {}
+        el.innerHTML = '';
+        if (!items.length) { el.innerHTML = '<div class="text-[10px] text-muted">This note has no headings.</div>'; return; }
+        items.forEach(it => {
+            if (q && !it.txt.toLowerCase().includes(q)) return;
+            const b = document.createElement('button');
+            b.className = 'ol-item w-full text-left text-xs py-1 rounded-r-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-text transition flex items-center';
+            b.style.paddingLeft = (4 + (Math.min(it.lvl, 4) - 1) * 13) + 'px';
+            b.innerHTML = '<span class="ol-ch"></span><span class="truncate">' + escapeHtml(it.txt) + '</span>';
+            b.onclick = () => { try { it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} };
+            el.appendChild(b);
+        });
+    }
+    const _zd51Outline = renderOutline;
+    renderOutline = function () { if (state.isGuest) return renderGuestOutline(); return _zd51Outline(); };
+    const os = $('outline-search');
+    if (os) {
+        os.addEventListener('input', () => { if (state.isGuest) renderGuestOutline(); });
+        ['focusin', 'pointerup', 'input'].forEach(ev => os.addEventListener(ev, () => { if (state.isGuest) { try { zdArmProtect(os); } catch (e) {} } }));
+    }
+    const _zd51Panel = window.toggleCommentsPanel;
+    window.toggleCommentsPanel = function () { const r = _zd51Panel(); if (state.isGuest) setTimeout(renderGuestOutline, 60); return r; };
+
+    /* ---------- block copy / cut / print / context menu ---------- */
+    ['copy', 'cut'].forEach(ev => document.addEventListener(ev, (e) => {
+        if (!state.isGuest) return;
+        if (e.target && e.target.closest && e.target.closest('input, textarea')) return; /* allow the search boxes */
+        e.preventDefault();
+        try { e.clipboardData && e.clipboardData.setData('text/plain', 'Shared via ZenDocs — ' + SITE); } catch (err) {}
+        locked('Copying text');
+    }, true));
+    document.addEventListener('contextmenu', (e) => {
+        if (!state.isGuest) return;
+        if (!e.target.closest || !e.target.closest('#paper-container')) return;
+        e.preventDefault(); locked('Saving content');
+    }, true);
+    document.addEventListener('dragstart', (e) => { if (state.isGuest && e.target.closest && e.target.closest('#paper-container')) e.preventDefault(); }, true);
+    document.addEventListener('keydown', (e) => {
+        if (!state.isGuest) return;
+        const inField = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+        const k = (e.key || '').toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && ['c', 'x', 'p', 's'].includes(k) && !inField) {
+            e.preventDefault();
+            locked(k === 'p' ? 'Printing' : k === 's' ? 'Saving' : 'Copying');
+        }
+        if ((e.ctrlKey || e.metaKey) && k === 'a' && !inField) { e.preventDefault(); }
+    }, true);
+    /* download entry points */
+    const _zd51Dl = window.openDownloadMenu;
+    window.openDownloadMenu = function () { if (state.isGuest) { locked('Downloading'); return; } return _zd51Dl(); };
+    ['exportWord', 'exportPDF', 'exportText', 'exportMarkdown', 'copyMarkdown', 'publishWebpage'].forEach(fn => {
+        const orig = window[fn];
+        if (typeof orig !== 'function') return;
+        window[fn] = function () { if (state.isGuest) { locked('Exporting'); return; } return orig.apply(this, arguments); };
+    });
+
+    /* ---------- screenshot deterrence (best-effort) ---------- */
+    document.addEventListener('keyup', (e) => {
+        if (!state.isGuest) return;
+        if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+            try { navigator.clipboard.writeText('Shared via ZenDocs — sign in at ' + SITE); } catch (err) {}
+            document.body.classList.add('gv-shield');
+            locked('Screenshots');
+            setTimeout(() => document.body.classList.remove('gv-shield'), 1400);
+        }
+    }, true);
+    window.addEventListener('blur', () => { if (state.isGuest) document.body.classList.add('gv-shield'); });
+    window.addEventListener('focus', () => document.body.classList.remove('gv-shield'));
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') document.body.classList.remove('gv-shield');
+        else if (state.isGuest) document.body.classList.add('gv-shield');
+    });
+
+    /* ---------- Back button returns to the shared note ---------- */
+    const _zd51Open = window.openLoginForGuest;
+    window.openLoginForGuest = function () {
+        hideNudge();
+        $('gv-panel').classList.remove('open');
+        try { history.pushState({ zdLogin: 1 }, '', location.href); } catch (e) {}
+        const r = _zd51Open();
+        els.authCancelContainer && els.authCancelContainer.classList.remove('hidden');
+        return r;
+    };
+    const _zd51Close = window.closeLoginForGuest;
+    window.closeLoginForGuest = function () {
+        const r = _zd51Close();
+        try { if (history.state && history.state.zdLogin) history.back(); } catch (e) {}
+        return r;
+    };
+    window.addEventListener('popstate', () => {
+        if (state.isGuest && !els.authScreen.classList.contains('hidden')) _zd51Close();
+    });
+})();    
     
         
     /* ============================================================
