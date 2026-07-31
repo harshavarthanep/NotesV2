@@ -11667,6 +11667,299 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 900);
 })();    
 
+     // New Code
+
+     /* ============================================================
+   V5.5c — GOOGLE-DOCS SAVING + BULLETPROOF UNDO / REDO
+   Root cause of the broken undo: the Firestore snapshot echo hit the
+   `cur !== nw` branch in initData → setContents() + history.clear().
+   Fix: (1) history.clear() is gated to real note switches only,
+   (2) after every write we re-baseline the signature AND stamp
+   lastTypeTime so the echo can never repaint, (3) the token
+   highlighter no longer eats undo steps, (4) Ctrl+Z/Y bound at
+   window capture so they work regardless of focus.
+   Save states: idle → "Saving…" (amber spinner) → "Saved" (green
+   tick). No status churn while typing. No write when nothing changed.
+============================================================ */
+(function zd55c() {
+    if (window.__zd55c) return; window.__zd55c = true;
+
+    const IDLE = 2000, MAX = 10000;
+    let firstEdit = 0, lastSaved = 0, savingNow = false;
+
+    /* ---------- status pills ---------- */
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    #save-status{gap:5px;font-weight:700;font-size:10px;}
+    #save-status.zd-typing{color:#9ca3af;}
+    #save-status.zd-saving{color:#d97706;}
+    html.dark #save-status.zd-saving{color:#fbbf24;}
+    #save-status.zd-saved{color:#16a34a;}
+    html.dark #save-status.zd-saved{color:#4ade80;}
+    #save-status.zd-off{color:#f59e0b;}
+    #save-status.zd-err{color:#d93025;}
+    .zd-spin{width:10px;height:10px;flex-shrink:0;border-radius:99px;border:1.6px solid currentColor;border-top-color:transparent;animation:zdSpin .62s linear infinite;}
+    @keyframes zdSpin{to{transform:rotate(360deg)}}
+    .zd-tick{width:11px;height:11px;flex-shrink:0;animation:zdPop .32s cubic-bezier(.22,1,.36,1);}
+    @keyframes zdPop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.22)}100%{transform:scale(1);opacity:1}}
+    .zd-dot{width:6px;height:6px;border-radius:99px;background:currentColor;flex-shrink:0;opacity:.75;}
+    </style>`);
+
+    const TICK = '<svg class="zd-tick" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+    const CLOUD = '<svg class="zd-tick" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-10 5 5 0 10-9.8 2A4 4 0 003 15z"/></svg>';
+    const WARN = '<svg class="zd-tick" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.5m0 3.5h.01M5 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0L3.3 16A2 2 0 005 19z"/></svg>';
+
+    function pill(kind, html) {
+        const el = els.status; if (!el) return;
+        el.className = 'zd-' + kind;
+        el.innerHTML = html;
+    }
+    function showSaved(force) {
+        const m = lastSaved ? Math.floor((Date.now() - lastSaved) / 60000) : 0;
+        pill('saved', TICK + '<span>' + (m < 1 ? 'Saved' : m === 1 ? 'Saved 1 min ago' : 'Saved ' + m + ' min ago') + '</span>');
+    }
+    /* neutralise every legacy setStatus call so nothing overwrites our pills */
+    window.setStatus = function (kind, text) {
+        if (kind === 'offline') { pill('off', CLOUD + '<span>' + (text || 'Offline — unsaved edits') + '</span>'); return; }
+        if (kind === 'error') { pill('err', WARN + '<span>' + (text || 'Error saving') + '</span>'); return; }
+        if (kind === 'saving') { if (savingNow) pill('saving', '<span class="zd-spin"></span><span>Saving…</span>'); return; }
+        if (kind === 'saved') { showSaved(); return; }
+        pill('typing', '<span class="zd-dot"></span><span>' + (text || '') + '</span>');
+    };
+
+    /* ---------- 1. protect the undo stack ---------- */
+    let allowClear = false;
+    const _clear = quill.history.clear.bind(quill.history);
+    quill.history.clear = function () { if (allowClear) return _clear(); };
+
+    /* ---------- 2. saving that can never trigger a repaint ---------- */
+    async function doSave() {
+        if (!state.docId || state.isGuest || state.offlineMode) return;
+        if (computeSaveSig() === state.lastSavedSig) { state.dirty = false; showSaved(); return; }
+        savingNow = true;
+        pill('saving', '<span class="zd-spin"></span><span>Saving…</span>');
+        state.lastTypeTime = Date.now();          /* blocks initData's isTyping branch */
+        try {
+            await saveToDb();
+            state.lastSavedSig = computeSaveSig(); /* echo now compares equal → no setContents */
+            state.dirty = false;
+            lastSaved = Date.now();
+            savingNow = false;
+            showSaved();
+        } catch (e) {
+            savingNow = false;
+            pill('err', WARN + '<span>Couldn\u2019t save — retrying…</span>');
+            setTimeout(() => { if (state.dirty) doSave(); }, 4000);
+        }
+    }
+
+    window.triggerSave = function () {
+        if (!state.docId || state.isGuest) return;
+        if (document.body.classList.contains('zd-locked')) return;
+        /* no real change → leave the existing Saved/Synced pill untouched */
+        if (computeSaveSig() === state.lastSavedSig) {
+            state.dirty = false;
+            if (state.saveTimer) { clearTimeout(state.saveTimer); state.saveTimer = null; }
+            firstEdit = 0;
+            if (!savingNow) { state.offlineMode ? setStatus('offline') : showSaved(); }
+            return;
+        }
+        state.dirty = true;
+        if (state.offlineMode) { setStatus('offline', 'Offline — unsaved edits (Ctrl+S to sync)'); return; }
+        if (!firstEdit) firstEdit = Date.now();
+        if (state.saveTimer) clearTimeout(state.saveTimer);
+        const waited = Date.now() - firstEdit;
+        state.saveTimer = setTimeout(() => { firstEdit = 0; state.saveTimer = null; doSave(); },
+            waited >= MAX ? 0 : Math.min(IDLE, MAX - waited));
+    };
+
+    function flush() {
+        if (!state.dirty || !state.docId || state.isGuest || state.offlineMode) return;
+        if (state.saveTimer) { clearTimeout(state.saveTimer); state.saveTimer = null; }
+        firstEdit = 0; doSave();
+    }
+    window.zdFlushSave = flush;
+
+    /* ---------- 3. openDoc: flush, then allow ONE history clear ---------- */
+    const _od = window.openDoc;
+    window.openDoc = function (id, data) {
+        flush();
+        allowClear = (state.docId !== id);
+        const r = _od(id, data);
+        setTimeout(() => { allowClear = false; }, 500);
+        lastSaved = Date.now();
+        setTimeout(() => { if (!state.dirty && !savingNow) showSaved(); }, 120);
+        return r;
+    };
+
+    /* ---------- 4. guaranteed flush points ---------- */
+    quill.root.addEventListener('blur', () => setTimeout(flush, 80));
+    els.title.addEventListener('blur', () => setTimeout(flush, 80));
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', (e) => { if (state.dirty && !state.offlineMode) { flush(); e.preventDefault(); e.returnValue = ''; } });
+
+    /* ---------- 5. undo / redo that always works ---------- */
+    function undo() { try { if (!quill.hasFocus()) quill.focus(); } catch (e) {} quill.history.undo(); updateWordCount(); triggerSave(); }
+    function redo() { try { if (!quill.hasFocus()) quill.focus(); } catch (e) {} quill.history.redo(); updateWordCount(); triggerSave(); }
+    window.zdUndo = undo; window.zdRedo = redo;
+    const ub = document.getElementById('undo-btn'), rb = document.getElementById('redo-btn');
+    if (ub) { ub.onclick = null; ub.addEventListener('click', (e) => { e.preventDefault(); undo(); }); }
+    if (rb) { rb.onclick = null; rb.addEventListener('click', (e) => { e.preventDefault(); redo(); }); }
+    window.addEventListener('keydown', (e) => {
+        if (!(e.ctrlKey || e.metaKey) || state.isGuest || !state.docId) return;
+        const ae = document.activeElement;
+        if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+        const k = (e.key || '').toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); undo(); }
+        else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); redo(); }
+        else if (k === 's') { e.preventDefault(); flush(); }
+    }, true);
+
+    /* ---------- 6. token highlighter must not consume undo steps ---------- */
+    const _scan = window.scanInlineTokens;
+    if (typeof _scan === 'function') {
+        window.scanInlineTokens = function (save) {
+            const st = quill.history.stack;
+            const len = (st && st.undo) ? st.undo.length : -1;
+            const r = _scan(save);
+            if (len >= 0 && st.undo.length > len) st.undo.length = len; /* formatting-only pass */
+            return r;
+        };
+    }
+
+    /* ---------- 7. keep the "Saved N min ago" text fresh ---------- */
+    setInterval(() => { if (!state.dirty && !savingNow && !state.offlineMode && state.docId && !state.isGuest && els.status.className === 'zd-saved') showSaved(); }, 30000);
+    setTimeout(() => { if (state.docId && !state.isGuest) { lastSaved = Date.now(); showSaved(); } }, 1500);
+})();
+
+    /* ============================================================
+   V5.9 — RESPONSIVE FIXES: CANVAS + TEMPLATES + VIEW HEADERS
+   • Canvas close (×) always visible on mobile; toolbar wraps into
+     two tidy rows instead of overflowing off-screen
+   • Templates grid, header buttons and daily-template row reflow
+   • Every zd-view-head keeps its close button pinned and reachable
+============================================================ */
+(function zd59() {
+    if (window.__zd59) return; window.__zd59 = true;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ---------- shared: view headers never lose the × ---------- */
+    .zd-view-head{flex-wrap:wrap;row-gap:6px;padding-right:8px!important;min-height:52px;}
+    .zd-view-head > span:first-child{min-width:0;flex:1 1 auto;}
+    .zd-view-head button[onclick^="close"]{flex-shrink:0;}
+
+    @media (max-width:900px){
+      /* ---------- CANVAS ---------- */
+      #canvas-modal .zd-view-head{align-items:flex-start;padding:7px 8px 8px 12px!important;gap:4px;}
+      #canvas-modal .zd-view-head > span:first-child{order:1;flex:1 1 auto;font-size:12.5px;}
+      #canvas-modal .zd-view-head > div{order:3;width:100%;display:flex!important;flex-wrap:wrap;gap:5px;justify-content:flex-start;}
+      /* pull the close button out of the button row and pin it top-right */
+      #canvas-modal .zd-view-head > div > button[onclick^="closeCanvas"]{
+          order:2;position:absolute;top:6px;right:8px;width:34px!important;height:34px!important;
+          border-radius:99px;background:var(--bg-color);border:1px solid var(--border-color);
+          display:flex;align-items:center;justify-content:center;font-size:20px;z-index:3;}
+      #canvas-modal .zd-view-head{position:relative;padding-right:52px!important;}
+      #canvas-modal .zd-view-head > div > button,
+      #canvas-modal .zd-view-head > div > span{flex-shrink:0;}
+      #canvas-modal .zd-view-head > div > button:not([onclick^="closeCanvas"]){
+          padding:6px 10px!important;font-size:10.5px!important;border-radius:10px!important;min-height:32px;}
+      #canvas-status{display:block;width:100%;order:4;font-size:9.5px;}
+      #canvas-zoom-label{min-width:38px;text-align:center;font-size:10px;}
+      #canvas-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px));right:16px;width:52px;height:52px;font-size:26px;}
+      #canvas-empty span{font-size:11px;line-height:1.65;}
+      .cv-card{width:172px;}
+      .cv-card .p-2\\.5{padding:8px!important;}
+      .cv-card button{width:26px!important;height:26px!important;}
+
+      /* ---------- TEMPLATES ---------- */
+      #templates-modal .zd-view-head{position:relative;padding-right:48px!important;align-items:flex-start;}
+      #templates-modal .zd-view-head > div{order:3;width:100%;display:flex!important;flex-wrap:wrap;gap:6px;}
+      #templates-modal .zd-view-head > div > button[onclick^="closeTemplates"]{
+          position:absolute;top:8px;right:8px;width:34px!important;height:34px!important;
+          border-radius:99px;background:var(--bg-color);border:1px solid var(--border-color);
+          display:flex;align-items:center;justify-content:center;font-size:20px;z-index:3;}
+      #templates-modal .zd-view-head > div > button:not([onclick^="closeTemplates"]){
+          flex:1 1 auto;white-space:normal;line-height:1.35;padding:8px 12px!important;font-size:10.5px!important;border-radius:12px!important;}
+      #tpl-builtin{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;}
+      #tpl-builtin button{padding:14px 8px!important;}
+      #tpl-user > div{flex-wrap:wrap;row-gap:7px;}
+      #tpl-user > div > span:first-child{width:100%;}
+      #zd-dtpl .flex{flex-wrap:wrap;gap:7px!important;}
+      #zd-dtpl-sel{flex:1 1 100%;font-size:13px;padding:8px 10px;}
+      #zd-dtpl-save{flex:1 1 100%;padding:9px 0!important;font-size:11px!important;}
+
+      /* ---------- KANBAN / EIS / HOME headers ---------- */
+      #kanban-modal .zd-view-head,#eis-modal .zd-view-head,#home-modal .zd-view-head{padding-right:8px!important;}
+      #kanban-cols{padding:10px!important;gap:10px!important;}
+      .kb-col{min-width:82vw;width:82vw;}
+      #eis-grid{gap:10px!important;}
+    }
+
+    /* ---------- tablet ---------- */
+    @media (min-width:901px) and (max-width:1180px){
+      #canvas-modal .zd-view-head > div{flex-wrap:wrap;justify-content:flex-end;gap:5px;}
+      #canvas-modal .zd-view-head > div > button:not([onclick^="closeCanvas"]){padding:5px 9px!important;font-size:10px!important;}
+      #tpl-builtin{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+      .kb-col{max-width:none;}
+    }
+
+    /* ---------- very small phones ---------- */
+    @media (max-width:400px){
+      #canvas-modal .zd-view-head > span:first-child span:not(#canvas-status){display:none;}
+      #tpl-builtin{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+      .kb-col{min-width:88vw;width:88vw;}
+    }
+    </style>`);
+
+    /* --- safety net: guarantee a reachable close button in every view --- */
+    function ensureClose(modalId, fnName, label) {
+        const m = document.getElementById(modalId); if (!m) return;
+        const head = m.querySelector('.zd-view-head'); if (!head) return;
+        if (head.querySelector('[data-zdx]')) return;
+        const has = Array.from(head.querySelectorAll('button')).some(b => (b.getAttribute('onclick') || '').indexOf(fnName) === 0);
+        if (has && window.innerWidth > 900) return;
+        const b = document.createElement('button');
+        b.dataset.zdx = '1';
+        b.title = 'Close ' + label + ' (Esc)';
+        b.className = 'zd-x-safe';
+        b.style.cssText = 'position:absolute;top:7px;right:8px;width:34px;height:34px;border-radius:99px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:6;';
+        b.textContent = '×';
+        b.onclick = (e) => { e.stopPropagation(); try { window[fnName](); } catch (err) {} };
+        head.style.position = 'relative';
+        head.appendChild(b);
+    }
+    function syncCloses() {
+        if (window.innerWidth > 900) { document.querySelectorAll('[data-zdx]').forEach(x => x.remove()); return; }
+        ensureClose('canvas-modal', 'closeCanvas', 'canvas');
+        ensureClose('templates-modal', 'closeTemplates', 'templates');
+        ensureClose('kanban-modal', 'closeKanban', 'board');
+        ensureClose('eis-modal', 'closeEisenhower', 'matrix');
+        ensureClose('calendar-modal', 'closeCalendar', 'calendar');
+        ensureClose('home-modal', 'closeHome', 'home');
+    }
+    ['openCanvas', 'openTemplates', 'openKanban', 'openEisenhower', 'openCalendar', 'openHome'].forEach(fn => {
+        const o = window[fn];
+        if (typeof o !== 'function') return;
+        window[fn] = function () { const r = o.apply(this, arguments); setTimeout(syncCloses, 260); return r; };
+    });
+    window.addEventListener('resize', () => setTimeout(syncCloses, 120));
+    setTimeout(syncCloses, 1200);
+
+    /* --- canvas: re-fit after the header reflows on small screens --- */
+    const _oc = window.openCanvas;
+    if (typeof _oc === 'function') window.openCanvas = async function () {
+        const r = await _oc.apply(this, arguments);
+        [320, 700].forEach(t => setTimeout(() => { try { if (Object.keys(cv.items).length) canvasFit(); applyStageTransform(); } catch (e) {} }, t));
+        return r;
+    };
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            const m = document.getElementById('canvas-modal');
+            if (m && m.classList.contains('open')) { try { canvasFit(); } catch (e) {} }
+        }, 420);
+    });
+})();    
+
         
     /* ============================================================
        INIT
