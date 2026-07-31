@@ -11969,6 +11969,333 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     setTimeout(renderDocs, 400);
 })();
 
+   /* ============================================================
+   V6.0 — HEADER UNIFICATION · MENTIONS PANEL · FIXES · POLISH
+   A) Canvas + Templates headers match Home/Kanban/Eisenhower
+      (help left · centred title · single close right)
+   B) "Select text, then add a note" works again
+   C) Linked / Unlinked mentions move to their own panel (⋯ menu)
+   D) Ruler margins + Reset margins fixed
+   E) Global rounded-corner polish (nothing sharp)
+   F) Correct icons for Quick capture ⚡ and Writing stats
+============================================================ */
+(function zd60() {
+    if (window.__zd60) return; window.__zd60 = true;
+
+    /* clear any leftovers from the removed V5.9 attempts */
+    document.querySelectorAll('[data-zdx],.zdvh-row2').forEach(n => n.remove());
+    ['canvas-modal', 'templates-modal'].forEach(id => { const m = document.getElementById(id); if (m) { delete m.dataset.zd59b; delete m.dataset.zd60; } });
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ================= A) UNIFIED VIEW HEADER ================= */
+    .zd-view-head{display:grid!important;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;
+        min-height:54px;padding:8px 10px!important;flex-wrap:nowrap!important;}
+    .zdvh-l,.zdvh-r{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+    .zdvh-r{justify-content:flex-end;}
+    .zdvh-mid{min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;}
+    .zdvh-mid > span{min-width:0;}
+    .zdvh-title{font-size:13px;font-weight:800;color:var(--text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .zdvh-sub{display:none;font-size:9.5px;color:#9ca3af;font-weight:600;}
+    @media (min-width:1000px){.zdvh-sub{display:block;}}
+    .zdvh-b{width:30px;height:30px;flex-shrink:0;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;
+        color:#9ca3af;transition:all .16s ease;}
+    .zdvh-b svg{width:16px;height:16px;}
+    .zdvh-b:hover{color:rgb(var(--accent-rgb));background:rgb(var(--accent-rgb) / .13);transform:scale(1.07);}
+    .zdvh-b:active{transform:scale(.9);}
+    .zdvh-x{width:32px;height:32px;flex-shrink:0;border-radius:99px;display:flex;align-items:center;justify-content:center;
+        font-size:21px;line-height:1;color:#9ca3af;transition:all .16s ease;}
+    .zdvh-x:hover{color:#d93025;background:rgba(217,48,37,.11);}
+    .zdvh-x:active{transform:scale(.88);}
+    /* tool row under the header (canvas / templates) */
+    .zdvh-tools{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding:0 12px 9px;background:var(--surface-color);
+        border-bottom:1px solid var(--border-color);}
+    .zdvh-tools button{flex:0 0 auto;padding:6px 12px;font-size:10.5px;font-weight:700;border-radius:12px;
+        background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color);transition:all .15s ease;}
+    .zdvh-tools button:hover{border-color:rgb(var(--accent-rgb));color:rgb(var(--accent-rgb));}
+    .zdvh-tools button:active{transform:scale(.96);}
+    .zdvh-zoom{display:flex;align-items:center;gap:3px;padding:2px;border-radius:12px;background:var(--bg-color);border:1px solid var(--border-color);}
+    .zdvh-zoom button{border:none!important;background:transparent!important;width:30px;padding:5px 0!important;border-radius:9px!important;}
+    .zdvh-lbl{font-size:10px;color:#9ca3af;min-width:38px;text-align:center;font-variant-numeric:tabular-nums;}
+    @media (max-width:900px){
+      .zd-view-head{min-height:50px;padding:7px 8px!important;}
+      .zdvh-title{font-size:12.5px;}
+      .zdvh-tools{padding:0 10px 8px;gap:5px;}
+      .zdvh-tools button{padding:6px 10px;font-size:10px;}
+      #tpl-builtin{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;}
+      #tpl-builtin button{padding:14px 8px!important;}
+      #tpl-user > div{flex-wrap:wrap;row-gap:7px;}
+      #tpl-user > div > span:first-child{width:100%;}
+      #zd-dtpl .flex{flex-wrap:wrap;gap:7px!important;}
+      #zd-dtpl-sel,#zd-dtpl-save{flex:1 1 100%;font-size:12.5px;padding:8px 10px;}
+      #canvas-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px));right:16px;width:52px;height:52px;font-size:26px;}
+      .cv-card{width:174px;}
+    }
+    @media (min-width:901px) and (max-width:1180px){ #tpl-builtin{grid-template-columns:repeat(3,minmax(0,1fr))!important;} }
+
+    /* ================= C) MENTIONS PANEL ================= */
+    #ment-modal{z-index:128;}
+    .zd-mtab{padding:7px 14px;font-size:11px;font-weight:800;border-radius:99px;color:#9ca3af;transition:all .16s ease;}
+    .zd-mtab.on{background-image:var(--zd-grad);color:#fff;}
+    .zd-mrow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;border-radius:13px;
+        border:1px solid var(--border-color);background:var(--bg-color);margin-bottom:6px;transition:all .16s ease;}
+    .zd-mrow:hover{border-color:rgb(var(--accent-rgb) / .6);transform:translateX(3px);}
+    .zd-mrow.dashed{border-style:dashed;}
+    /* tidy the sidebar panel (mentions now live elsewhere) */
+    #comments-panel .zd-mentions-old{display:none!important;}
+    #comments-list{padding:9px 12px!important;}
+    #add-note-btn-wrapper{padding:10px 12px!important;}
+    #add-note-btn-wrapper button{border-radius:13px!important;}
+
+    /* ================= E) ROUNDED POLISH ================= */
+    #ruler{border-radius:10px!important;}
+    #toolbar.ql-toolbar{border-radius:32px;}
+    .zd-tool,#toolbar .ql-formats button{border-radius:9px!important;}
+    .zd-size input{border-radius:9px!important;}
+    .ql-editor pre.ql-syntax{border-radius:12px;}
+    .ql-editor blockquote{border-radius:0 10px 10px 0;padding-top:2px;padding-bottom:2px;}
+    .ql-editor img{border-radius:10px;}
+    #paper-container{border-radius:10px!important;}
+    @media (max-width:850px){#paper-container{border-radius:0!important;}}
+    .ql-picker-options{border-radius:14px!important;}
+    .ql-picker-label{border-radius:9px!important;}
+    select,input[type=text],input[type=email],input[type=password],input[type=date],input[type=datetime-local],input[type=number],textarea{border-radius:11px;}
+    .zd-stat,.cm-row,.eis-row,.zd44-row,.kb-card,.cv-card{border-radius:14px;}
+    .doc-row{border-radius:11px!important;}
+    #cm-dir,#cm-sort,#cm-search{border-radius:12px!important;}
+    .zd-view-btn{border-radius:12px!important;}
+    #save-status,#word-count{border-radius:8px;}
+    .zd-mi{border-radius:9px;margin:0 4px;}
+    .ql-editor table td,.ql-editor table th{border-radius:4px;}
+    #graph-canvas{border-radius:0;}
+    button,.gv-cta,.zda-btn{border-radius:12px;}
+    .zdvh-b,.zdvh-x,.eis-check,.cm-ib,.zd44-ib{border-radius:99px!important;}
+    </style>`);
+
+    const HELP_SVG = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M9.2 9.4A3 3 0 0112 7.6c1.7 0 3 1 3 2.3 0 1.1-1 2-2.3 2.2-.4.1-.7.4-.7.9m0 3h.01"/></svg>';
+
+    /* ---------- A) rebuild every view header into one grid ---------- */
+    function buildHeader(cfg) {
+        const m = document.getElementById(cfg.modal); if (!m || m.dataset.zd60) return;
+        const head = m.querySelector('.zd-view-head'); if (!head) return;
+        m.dataset.zd60 = '1';
+
+        const titleSpan = head.querySelector('span');
+        const iconSvg = titleSpan ? (titleSpan.querySelector('svg') || {}).outerHTML || '' : '';
+        const actsWrap = head.querySelector('div');
+        const allBtns = Array.from(head.querySelectorAll('button'));
+        const closeBtn = allBtns.find(b => (b.getAttribute('onclick') || '').indexOf(cfg.close) === 0);
+        const tools = allBtns.filter(b => b !== closeBtn);
+
+        /* keep every tool node (handlers intact) for the second row */
+        const keepNodes = tools.slice();
+        const extraNodes = cfg.extraIds ? cfg.extraIds.map(i => document.getElementById(i)).filter(Boolean) : [];
+
+        head.innerHTML = '';
+        const L = document.createElement('span'); L.className = 'zdvh-l';
+        const M = document.createElement('span'); M.className = 'zdvh-mid';
+        const R = document.createElement('span'); R.className = 'zdvh-r';
+
+        const help = document.createElement('button');
+        help.className = 'zdvh-b'; help.dataset.vh = cfg.tour; help.title = 'How this works';
+        help.innerHTML = HELP_SVG;
+        help.onclick = (e) => { e.stopPropagation(); if (window.startTour) startTour(cfg.tour); };
+        L.appendChild(help);
+
+        M.innerHTML = `<span class="flex items-center gap-2 min-w-0"><span class="text-accent flex-shrink-0" style="display:inline-flex">${iconSvg}</span><span class="zdvh-title">${cfg.title}</span></span><span class="zdvh-sub">${cfg.sub || ''}</span>`;
+
+        const x = document.createElement('button');
+        x.className = 'zdvh-x'; x.title = 'Close (Esc)'; x.textContent = '×';
+        x.onclick = (e) => { e.stopPropagation(); try { window[cfg.close](); } catch (err) {} };
+        R.appendChild(x);
+
+        head.appendChild(L); head.appendChild(M); head.appendChild(R);
+        if (actsWrap && actsWrap.parentElement) actsWrap.remove();
+        if (closeBtn) closeBtn.remove();
+
+        if (keepNodes.length || extraNodes.length) {
+            const row = document.createElement('div');
+            row.className = 'zdvh-tools';
+            if (cfg.zoom) {
+                const z = document.createElement('span'); z.className = 'zdvh-zoom';
+                cfg.zoom.forEach(sel => {
+                    const b = keepNodes.find(n => (n.getAttribute('onclick') || '').indexOf(sel) === 0);
+                    if (b) { b.className = ''; z.appendChild(b); }
+                    if (sel === cfg.zoom[0] && cfg.zoomLbl) {
+                        const l = document.getElementById(cfg.zoomLbl);
+                        if (l) { l.className = 'zdvh-lbl'; z.appendChild(l); }
+                    }
+                });
+                if (z.children.length) row.appendChild(z);
+            }
+            keepNodes.forEach(b => { if (b.parentElement !== row.querySelector('.zdvh-zoom')) { b.className = ''; row.appendChild(b); } });
+            extraNodes.forEach(n => { n.style.fontSize = '9.5px'; n.style.alignSelf = 'center'; row.appendChild(n); });
+            head.insertAdjacentElement('afterend', row);
+        }
+    }
+
+    function runHeaders() {
+        buildHeader({ modal: 'canvas-modal', close: 'closeCanvas', tour: 'canvas', title: 'Canvas', sub: 'Freeform idea board', zoom: ['canvasZoom(0.85', 'canvasZoom(1.18'], zoomLbl: 'canvas-zoom-label', extraIds: ['canvas-status'] });
+        buildHeader({ modal: 'templates-modal', close: 'closeTemplates', tour: 'templates', title: 'Templates', sub: 'Reusable note layouts' });
+        /* dedupe stray close buttons in the other views */
+        [['calendar-modal', 'closeCalendar'], ['kanban-modal', 'closeKanban'], ['eis-modal', 'closeEisenhower'], ['home-modal', 'closeHome']].forEach(([id, fn]) => {
+            const m = document.getElementById(id); if (!m) return;
+            const head = m.querySelector('.zd-view-head'); if (!head) return;
+            const xs = Array.from(head.querySelectorAll('button')).filter(b => b.textContent.trim() === '×' || (b.getAttribute('onclick') || '').indexOf(fn) === 0);
+            xs.forEach((b, i) => { if (i < xs.length - 1) b.remove(); else { b.className = 'zdvh-x'; b.textContent = '×'; } });
+        });
+    }
+    ['openCanvas', 'openTemplates', 'openCalendar', 'openKanban', 'openEisenhower', 'openHome'].forEach(fn => {
+        const o = window[fn]; if (typeof o !== 'function') return;
+        window[fn] = function () { const r = o.apply(this, arguments); setTimeout(runHeaders, 200); return r; };
+    });
+    setTimeout(runHeaders, 900);
+    const _oc = window.openCanvas;
+    if (typeof _oc === 'function') window.openCanvas = async function () {
+        const r = await _oc.apply(this, arguments);
+        [340, 780].forEach(t => setTimeout(() => { try { if (Object.keys(cv.items).length) canvasFit(); applyStageTransform(); } catch (e) {} }, t));
+        return r;
+    };
+
+    /* ---------- B) "Select text, then add a note" works again ---------- */
+    let lastSel = null;
+    quill.on('selection-change', (r) => { if (r && r.length > 0) lastSel = { index: r.index, length: r.length }; });
+    window.startComment = function () {
+        if (state.isGuest) { showToast('Sign in to add notes.'); return; }
+        if (!state.docId) { showToast('Open a note first.'); return; }
+        let r = quill.getSelection();
+        if (!r || r.length === 0) r = lastSel;
+        if (!r || r.length === 0) { showToast('Select some text in the note first, then tap “add a note”.', 3600); return; }
+        window._pendingCommentRange = { index: r.index, length: r.length };
+        try { window.eval; } catch (e) {}
+        const quote = quill.getText(r.index, r.length);
+        els.commentQuote.textContent = '"' + quote.slice(0, 120) + '"';
+        els.commentModal.dataset.quote = quote.slice(0, 200);
+        els.commentText.value = '';
+        els.commentModal.style.display = 'flex';
+        setTimeout(() => { try { els.commentText.focus({ preventScroll: true }); zdArmProtect(els.commentText); } catch (e) {} }, 110);
+    };
+    window.submitComment = async function () {
+        const text = els.commentText.value.trim();
+        if (!text) { showToast('Please write your note first.'); return; }
+        const rg = window._pendingCommentRange;
+        if (!rg) { showToast('Selection lost — select the text again.'); closeCommentModal(); return; }
+        const cid = 'c' + Date.now() + Math.floor(Math.random() * 9999);
+        const comment = { quote: els.commentModal.dataset.quote || '', text: text, author: state.user.email, authorUid: state.user.uid, ts: Date.now() };
+        const active = state.docs.find(d => d.id === state.docId);
+        try {
+            if (active && active.importedFromShareId) {
+                await db.collection('shared_docs').doc(active.importedFromShareId).set({ comments: { [cid]: comment } }, { merge: true });
+            } else {
+                quill.formatText(rg.index, rg.length, 'comment', cid, 'user');
+            }
+            state.comments[cid] = comment;
+            triggerSave(); renderComments(); closeCommentModal();
+            if (els.commentsPanel.classList.contains('hidden')) toggleCommentsPanel();
+            showToast('Note added.');
+        } catch (e) { console.error(e); showToast('Could not add the note.'); }
+    };
+    const addBtn = document.querySelector('#add-note-btn-wrapper button');
+    if (addBtn) { addBtn.onclick = null; addBtn.addEventListener('click', (e) => { e.preventDefault(); startComment(); }); }
+    const cbtn = document.getElementById('comment-btn');
+    if (cbtn) { cbtn.onclick = null; cbtn.addEventListener('click', (e) => { e.preventDefault(); startComment(); }); }
+
+    /* ---------- C) Mentions in their own panel ---------- */
+    document.querySelectorAll('#backlinks-list, #unlinked-list').forEach(el => {
+        const sec = el.closest('.border-t') || el.parentElement;
+        if (sec) sec.classList.add('zd-mentions-old');
+    });
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="ment-modal" class="zd-cmodal"><div class="zd-cmodal-box max-w-md flex flex-col" style="max-height:82vh">
+      <div class="flex items-center justify-between mb-2 flex-shrink-0">
+        <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7l1.5-1.5M10.2 13.8a4 4 0 010-5.7l3-3a4 4 0 115.6 5.7l-1.5 1.5"/></svg> Mentions</h3>
+        <button onclick="closeMentions()" class="zdvh-x">×</button>
+      </div>
+      <div id="ment-note" class="text-[10.5px] text-muted truncate mb-2 flex-shrink-0"></div>
+      <div class="flex gap-1 mb-3 bg-bg border border-border rounded-full p-0.5 w-fit flex-shrink-0">
+        <button id="ment-t1" class="zd-mtab on" onclick="mentTab('linked')">Linked</button>
+        <button id="ment-t2" class="zd-mtab" onclick="mentTab('unlinked')">Unlinked</button>
+      </div>
+      <div id="ment-body" class="flex-1 min-h-0 overflow-y-auto zd-scroll pr-1"></div>
+    </div></div>`);
+    let mTab = 'linked';
+    window.openMentions = () => {
+        if (state.isGuest || !state.docId) { showToast('Open a note first.'); return; }
+        document.getElementById('ment-modal').classList.add('open');
+        renderMentions();
+    };
+    window.closeMentions = () => document.getElementById('ment-modal').classList.remove('open');
+    window.mentTab = (t) => { mTab = t; renderMentions(); };
+    function renderMentions() {
+        const cur = state.docs.find(d => d.id === state.docId);
+        const title = ((cur && cur.title) || els.title.value || '').trim();
+        document.getElementById('ment-note').textContent = 'For “' + title + '”';
+        document.getElementById('ment-t1').className = 'zd-mtab' + (mTab === 'linked' ? ' on' : '');
+        document.getElementById('ment-t2').className = 'zd-mtab' + (mTab === 'unlinked' ? ' on' : '');
+        const body = document.getElementById('ment-body');
+        body.innerHTML = '';
+        if (!title) { body.innerHTML = '<div class="text-center text-muted text-xs py-8">Give this note a title first.</div>'; return; }
+        const re = new RegExp('\\[\\[\\s*' + escapeRegExp(title) + '\\s*\\]\\]', 'i');
+        const linked = state.docs.filter(d => d.id !== state.docId && re.test(docPlainText(d)));
+        if (mTab === 'linked') {
+            if (!linked.length) { body.innerHTML = '<div class="text-center text-muted text-[11px] py-8 leading-relaxed">No notes link here yet.<br>Type <b>[[' + escapeHtml(title) + ']]</b> in another note to create a backlink.</div>'; return; }
+            linked.forEach(d => body.appendChild(row(d, false)));
+        } else {
+            const ids = new Set(linked.map(d => d.id));
+            const t = title.toLowerCase();
+            const hits = state.docs.filter(d => d.id !== state.docId && !ids.has(d.id) && !(d.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(d.id))) && docPlainText(d).toLowerCase().includes(t));
+            if (!hits.length) { body.innerHTML = '<div class="text-center text-muted text-[11px] py-8">No unlinked mentions of “' + escapeHtml(title) + '”.</div>'; return; }
+            body.insertAdjacentHTML('beforeend', '<div class="text-[10px] text-muted mb-2.5 leading-snug">These notes mention “' + escapeHtml(title) + '” without linking. Open one and wrap the mention in [[…]] to connect it.</div>');
+            hits.forEach(d => body.appendChild(row(d, true)));
+        }
+    }
+    function row(d, dashed) {
+        const b = document.createElement('button');
+        b.className = 'zd-mrow' + (dashed ? ' dashed' : '');
+        b.innerHTML = `<span class="${dashed ? 'text-muted' : 'text-accent'} flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${dashed ? '<circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>' : '<path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7"/>'}</svg></span>
+            <span class="min-w-0 flex-1"><span class="block text-xs font-medium text-text truncate">${escapeHtml(d.title || 'Untitled')}</span>
+            <span class="block text-[9px] text-muted">${d.updatedAt ? 'Edited ' + new Date(d.updatedAt.toDate()).toLocaleDateString() : ''}</span></span>`;
+        b.onclick = () => { closeMentions(); openDoc(d.id, d); };
+        return b;
+    }
+    document.getElementById('ment-modal').addEventListener('click', e => { if (e.target.id === 'ment-modal') closeMentions(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.getElementById('ment-modal').classList.contains('open')) { e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); closeMentions(); } }, true);
+    try {
+        zdMenuInject2('mentions', 'openMentions', 'Linked & unlinked mentions', '<path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7l1.5-1.5M10.2 13.8a4 4 0 010-5.7l3-3a4 4 0 115.6 5.7l-1.5 1.5"/>');
+        ZD_FEATURES.push({ id: 'mentions', label: 'Linked & unlinked mentions', fns: ['openMentions'] });
+    } catch (e) {}
+
+    /* ---------- D) margins + reset margins ---------- */
+    window.applyMargins = function () {
+        const ed = document.querySelector('.ql-editor');
+        if (ed) {
+            ed.style.setProperty('padding-left', state.marginL + 'px', 'important');
+            ed.style.setProperty('padding-right', state.marginR + 'px', 'important');
+        }
+        try { buildRuler(); } catch (e) {}
+    };
+    window.resetMargins = function () {
+        state.marginL = 96; state.marginR = 96;
+        applyMargins();
+        if (state.docId && !state.isGuest) triggerSave();
+        showToast('Margins reset to default.');
+    };
+    const rr = document.getElementById('ruler-reset');
+    if (rr) { rr.onclick = null; rr.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); resetMargins(); }); rr.style.cursor = 'pointer'; }
+    const _od2 = window.openDoc;
+    window.openDoc = function (id, data) { const r = _od2(id, data); setTimeout(() => { try { applyMargins(); } catch (e) {} }, 140); return r; };
+    setTimeout(() => { try { applyMargins(); } catch (e) {} }, 1400);
+
+    /* ---------- F) correct feature icons ---------- */
+    try {
+        ZD_FEAT_ICONS.qc = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/>';
+        ZD_FEAT_ICONS.stats = '<path stroke-linecap="round" stroke-linejoin="round" d="M9 19V9m6 10V5m6 14v-8M3 21h18"/>';
+        ZD_FEAT_ICONS.mentions = '<path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7l1.5-1.5M10.2 13.8a4 4 0 010-5.7l3-3a4 4 0 115.6 5.7l-1.5 1.5"/>';
+        ZD_FEAT_ICONS.replace = '<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>';
+        ZD_FEAT_ICONS.lock = '<rect x="5" y="11" width="14" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 018 0v4"/>';
+    } catch (e) {}
+    setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 700);
+})();     
+
 
     /* ============================================================
        INIT
