@@ -11832,54 +11832,187 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     setTimeout(() => { if (state.docId && !state.isGuest) { lastSaved = Date.now(); showSaved(); } }, 1500);
 })();
 
-    /* ============================================================
-   V5.9 — RESPONSIVE FIXES: CANVAS + TEMPLATES + VIEW HEADERS
-   • Canvas close (×) always visible on mobile; toolbar wraps into
-     two tidy rows instead of overflowing off-screen
-   • Templates grid, header buttons and daily-template row reflow
-   • Every zd-view-head keeps its close button pinned and reachable
+// New Code
+
+   /* ============================================================
+   V5.8b — DUPLICATE TITLE HANDLING + LIVE SIDEBAR SORT
+   • Duplicate name → toast warning + auto "(2)" on blur/save
+   • Warning clears on note switch, on fix, and on blur
+   • "Recent" sort re-sorts live on every edit (was only on reload)
 ============================================================ */
-(function zd59() {
-    if (window.__zd59) return; window.__zd59 = true;
+(function zd58b() {
+    if (window.__zd58b) return; window.__zd58b = true;
 
     document.head.insertAdjacentHTML('beforeend', `<style>
-    /* ---------- shared: view headers never lose the × ---------- */
-    .zd-view-head{flex-wrap:wrap;row-gap:6px;padding-right:8px!important;min-height:52px;}
+    #doc-title.zd-dup{color:#d97706!important;}
+    html.dark #doc-title.zd-dup{color:#fbbf24!important;}
+    #dup-hint{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(14px);z-index:119;display:none;
+        max-width:min(420px,92vw);background:var(--surface-color);border:1px solid #f59e0b;border-left:4px solid #f59e0b;
+        border-radius:14px;padding:11px 13px;box-shadow:0 16px 40px rgba(0,0,0,.3);opacity:0;transition:opacity .25s ease,transform .3s cubic-bezier(.22,1,.36,1);}
+    #dup-hint.on{display:block;opacity:1;transform:translateX(-50%) translateY(0);}
+    @media (max-width:850px){#dup-hint{bottom:auto;top:74px;}}
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="dup-hint"><div class="flex items-start gap-2.5">
+      <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.5m0 3.5h.01M5 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0L3.3 16A2 2 0 005 19z"/></svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-[11.5px] font-bold text-text">Another note already has this name</div>
+        <div id="dup-msg" class="text-[10.5px] text-muted leading-snug">Rename it, or ZenDocs will save it as a numbered copy.</div>
+        <div class="flex gap-1.5 mt-2">
+          <button id="dup-fix" class="px-3 py-1.5 text-[10.5px] font-bold rounded-lg text-white active:scale-95 transition" style="background-image:var(--zd-grad)">Use suggested name</button>
+          <button id="dup-edit" class="px-2.5 py-1.5 text-[10.5px] font-semibold rounded-lg text-muted hover:text-text transition">Let me rename</button>
+        </div>
+      </div>
+      <button id="dup-x" class="text-muted hover:text-danger text-base leading-none flex-shrink-0 active:scale-90">×</button>
+    </div></div>`);
+
+    const $ = id => document.getElementById(id);
+    const norm = s => (s || '').trim().toLowerCase();
+    let suggested = '';
+
+    function uniqueName(base) {
+        let b = (base || 'Untitled Document').trim().replace(/\s*\((\d+)\)$/, '');
+        let n = 2, t = b + ' (' + n + ')';
+        while (state.docs.some(d => d.id !== state.docId && norm(d.title) === norm(t))) { n++; t = b + ' (' + n + ')'; }
+        return t;
+    }
+    function isDup() {
+        if (!state.docId || state.isGuest) return false;
+        const v = norm(els.title.value);
+        if (!v) return false;
+        return state.docs.some(d => d.id !== state.docId && norm(d.title) === v);
+    }
+    function hideHint() { $('dup-hint').classList.remove('on'); }
+    window.zdClearDup = function () {
+        hideHint();
+        els.title.classList.remove('zd-dup');
+        els.title.title = '';
+        els.title.style.color = '';
+        suggested = '';
+    };
+    function showHint() {
+        suggested = uniqueName(els.title.value);
+        $('dup-msg').innerHTML = 'Rename it, or it will be saved as <b>' + escapeHtml(suggested) + '</b>.';
+        $('dup-hint').classList.add('on');
+        els.title.classList.add('zd-dup');
+        els.title.title = 'Another note already has this name';
+    }
+    function check() {
+        if (isDup()) showHint(); else zdClearDup();
+    }
+    $('dup-x').onclick = hideHint;
+    $('dup-edit').onclick = () => { hideHint(); try { els.title.focus(); els.title.select(); } catch (e) {} };
+    $('dup-fix').onclick = () => {
+        if (!suggested) suggested = uniqueName(els.title.value);
+        els.title.value = suggested;
+        zdClearDup();
+        triggerSave();
+        showToast('Renamed to “' + suggested + '”.');
+    };
+
+    /* live check while typing (debounced) */
+    let t = null;
+    els.title.addEventListener('input', () => { clearTimeout(t); t = setTimeout(check, 260); });
+
+    /* on blur: auto-number so the note ALWAYS saves */
+    els.title.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (!state.docId || state.isGuest) { zdClearDup(); return; }
+            if (!els.title.value.trim()) els.title.value = 'Untitled Document';
+            if (isDup()) {
+                const auto = uniqueName(els.title.value);
+                els.title.value = auto;
+                zdClearDup();
+                triggerSave();
+                showToast('Name taken — saved as “' + auto + '”. Rename it anytime.', 4200);
+            } else { zdClearDup(); }
+        }, 40);
+    }, true);
+
+    /* clear the warning whenever the open note changes */
+    const _od = window.openDoc;
+    window.openDoc = function (id, data) { zdClearDup(); const r = _od(id, data); setTimeout(zdClearDup, 80); return r; };
+    els.docList.addEventListener('click', () => setTimeout(zdClearDup, 60), true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('dup-hint').classList.contains('on')) { e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); hideHint(); } }, true);
+
+    /* ---------- LIVE "Recent" SORT ---------- */
+    const wc = d => { const x = docPlainText(d).trim(); return x ? x.split(/\s+/).length : 0; };
+    const ts = v => (v && v.toDate) ? v.toDate().getTime() : ((v && v.seconds) ? v.seconds * 1000 : 0);
+    const _rd = renderDocs;
+    renderDocs = function () {
+        const mode = localStorage.getItem('zdSortDocs') || 'recent';
+        const cmp = {
+            recent: (a, b) => ts(b.updatedAt) - ts(a.updatedAt),
+            title: (a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }),
+            created: (a, b) => ts(b.createdAt) - ts(a.createdAt),
+            words: (a, b) => wc(b) - wc(a)
+        }[mode];
+        if (cmp) state.docs.sort((a, b) => ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || cmp(a, b));
+        return _rd();
+    };
+    /* re-render the list shortly after each save so "Recent" reorders live */
+    const _sd = window.saveToDb;
+    window.saveToDb = async function () {
+        const r = await _sd.apply(this, arguments);
+        const d = state.docs.find(x => x.id === state.docId);
+        if (d) d.updatedAt = { toDate: () => new Date(), seconds: Math.floor(Date.now() / 1000) };
+        setTimeout(() => { try { renderDocs(); } catch (e) {} }, 60);
+        return r;
+    };
+    const sel = document.getElementById('zd-sort');
+    if (sel) sel.onchange = () => {
+        localStorage.setItem('zdSortDocs', sel.value);
+        renderDocs();
+        showToast('Sorted by ' + sel.options[sel.selectedIndex].text + '.');
+    };
+    setTimeout(renderDocs, 400);
+})();
+
+     /* ============================================================
+   V5.9b — UNIFIED VIEW HEADERS (all viewports)
+   • Canvas & Templates headers rebuilt to match Home/Kanban/Eis:
+     title left · actions right · ONE close button, always visible
+   • Canvas tools move to a second row on phones (never overflow)
+   • Calendar: removes every duplicate close button (keeps one)
+   • Help "?" buttons standardised to 28px with a hover ring
+============================================================ */
+(function zd59b() {
+    if (window.__zd59b) return; window.__zd59b = true;
+
+    /* strip anything the removed V5.9 may have left behind */
+    document.querySelectorAll('[data-zdx]').forEach(n => n.remove());
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ---- one consistent header for every full-screen view ---- */
+    .zd-view-head{display:flex!important;align-items:center;gap:8px;min-height:52px;padding:8px 10px 8px 14px!important;flex-wrap:nowrap!important;}
     .zd-view-head > span:first-child{min-width:0;flex:1 1 auto;}
-    .zd-view-head button[onclick^="close"]{flex-shrink:0;}
+    .zdvh-act{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+    .zdvh-x{width:34px;height:34px;flex-shrink:0;border-radius:99px;display:flex;align-items:center;justify-content:center;
+        font-size:21px;line-height:1;color:#9ca3af;transition:all .16s ease;}
+    .zdvh-x:hover{color:#d93025;background:rgba(217,48,37,.11);}
+    .zdvh-x:active{transform:scale(.88);}
+    /* standardised help button */
+    .zd-help-b{width:28px!important;height:28px!important;border-radius:99px;color:#9ca3af;display:inline-flex!important;
+        align-items:center;justify-content:center;flex-shrink:0;transition:all .16s ease;}
+    .zd-help-b svg{width:16px!important;height:16px!important;}
+    .zd-help-b:hover{color:rgb(var(--accent-rgb));background:rgb(var(--accent-rgb) / .13);transform:scale(1.08);}
+    /* canvas / template second row */
+    .zdvh-row2{display:none;width:100%;flex-wrap:wrap;gap:5px;padding:0 10px 8px 14px;border-bottom:1px solid var(--border-color);background:var(--surface-color);}
+    .zdvh-row2.on{display:flex;}
+    .zdvh-row2 button{flex:0 0 auto;padding:6px 11px;font-size:10.5px;font-weight:700;border-radius:11px;
+        background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color);transition:border-color .15s ease;}
+    .zdvh-row2 button:hover{border-color:rgb(var(--accent-rgb));color:rgb(var(--accent-rgb));}
+    .zdvh-row2 button:active{transform:scale(.96);}
+    .zdvh-row2 .zdvh-zoom{display:flex;align-items:center;gap:3px;flex:0 0 auto;}
+    .zdvh-row2 .zdvh-zoom button{width:32px;padding:6px 0;text-align:center;}
+    .zdvh-row2 .zdvh-lbl{font-size:10px;color:#9ca3af;min-width:38px;text-align:center;font-variant-numeric:tabular-nums;}
 
     @media (max-width:900px){
-      /* ---------- CANVAS ---------- */
-      #canvas-modal .zd-view-head{align-items:flex-start;padding:7px 8px 8px 12px!important;gap:4px;}
-      #canvas-modal .zd-view-head > span:first-child{order:1;flex:1 1 auto;font-size:12.5px;}
-      #canvas-modal .zd-view-head > div{order:3;width:100%;display:flex!important;flex-wrap:wrap;gap:5px;justify-content:flex-start;}
-      /* pull the close button out of the button row and pin it top-right */
-      #canvas-modal .zd-view-head > div > button[onclick^="closeCanvas"]{
-          order:2;position:absolute;top:6px;right:8px;width:34px!important;height:34px!important;
-          border-radius:99px;background:var(--bg-color);border:1px solid var(--border-color);
-          display:flex;align-items:center;justify-content:center;font-size:20px;z-index:3;}
-      #canvas-modal .zd-view-head{position:relative;padding-right:52px!important;}
-      #canvas-modal .zd-view-head > div > button,
-      #canvas-modal .zd-view-head > div > span{flex-shrink:0;}
-      #canvas-modal .zd-view-head > div > button:not([onclick^="closeCanvas"]){
-          padding:6px 10px!important;font-size:10.5px!important;border-radius:10px!important;min-height:32px;}
-      #canvas-status{display:block;width:100%;order:4;font-size:9.5px;}
-      #canvas-zoom-label{min-width:38px;text-align:center;font-size:10px;}
-      #canvas-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px));right:16px;width:52px;height:52px;font-size:26px;}
-      #canvas-empty span{font-size:11px;line-height:1.65;}
-      .cv-card{width:172px;}
-      .cv-card .p-2\\.5{padding:8px!important;}
-      .cv-card button{width:26px!important;height:26px!important;}
-
-      /* ---------- TEMPLATES ---------- */
-      #templates-modal .zd-view-head{position:relative;padding-right:48px!important;align-items:flex-start;}
-      #templates-modal .zd-view-head > div{order:3;width:100%;display:flex!important;flex-wrap:wrap;gap:6px;}
-      #templates-modal .zd-view-head > div > button[onclick^="closeTemplates"]{
-          position:absolute;top:8px;right:8px;width:34px!important;height:34px!important;
-          border-radius:99px;background:var(--bg-color);border:1px solid var(--border-color);
-          display:flex;align-items:center;justify-content:center;font-size:20px;z-index:3;}
-      #templates-modal .zd-view-head > div > button:not([onclick^="closeTemplates"]){
-          flex:1 1 auto;white-space:normal;line-height:1.35;padding:8px 12px!important;font-size:10.5px!important;border-radius:12px!important;}
+      .zd-view-head{padding:8px 8px 8px 12px!important;}
+      .zd-view-head > span:first-child{font-size:12.5px;}
+      .zd-view-head > span:first-child .hidden,
+      .zd-view-head > span:first-child span[class*="md:inline"]{display:none!important;}
       #tpl-builtin{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;}
       #tpl-builtin button{padding:14px 8px!important;}
       #tpl-user > div{flex-wrap:wrap;row-gap:7px;}
@@ -11887,79 +12020,156 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       #zd-dtpl .flex{flex-wrap:wrap;gap:7px!important;}
       #zd-dtpl-sel{flex:1 1 100%;font-size:13px;padding:8px 10px;}
       #zd-dtpl-save{flex:1 1 100%;padding:9px 0!important;font-size:11px!important;}
-
-      /* ---------- KANBAN / EIS / HOME headers ---------- */
-      #kanban-modal .zd-view-head,#eis-modal .zd-view-head,#home-modal .zd-view-head{padding-right:8px!important;}
-      #kanban-cols{padding:10px!important;gap:10px!important;}
+      #canvas-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px));right:16px;width:52px;height:52px;font-size:26px;}
+      .cv-card{width:174px;}
       .kb-col{min-width:82vw;width:82vw;}
-      #eis-grid{gap:10px!important;}
     }
-
-    /* ---------- tablet ---------- */
     @media (min-width:901px) and (max-width:1180px){
-      #canvas-modal .zd-view-head > div{flex-wrap:wrap;justify-content:flex-end;gap:5px;}
-      #canvas-modal .zd-view-head > div > button:not([onclick^="closeCanvas"]){padding:5px 9px!important;font-size:10px!important;}
       #tpl-builtin{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
-      .kb-col{max-width:none;}
+      .zdvh-row2 button{padding:5px 9px;font-size:10px;}
     }
-
-    /* ---------- very small phones ---------- */
-    @media (max-width:400px){
-      #canvas-modal .zd-view-head > span:first-child span:not(#canvas-status){display:none;}
-      #tpl-builtin{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
-      .kb-col{min-width:88vw;width:88vw;}
-    }
+    @media (max-width:400px){ #tpl-builtin{grid-template-columns:repeat(2,minmax(0,1fr))!important;} .kb-col{min-width:88vw;width:88vw;} }
     </style>`);
 
-    /* --- safety net: guarantee a reachable close button in every view --- */
-    function ensureClose(modalId, fnName, label) {
+    const X_SVG = '×';
+
+    /* ---------- 1. CALENDAR: keep exactly one close button ---------- */
+    function dedupeCloses(modalId, fnPrefix) {
         const m = document.getElementById(modalId); if (!m) return;
         const head = m.querySelector('.zd-view-head'); if (!head) return;
-        if (head.querySelector('[data-zdx]')) return;
-        const has = Array.from(head.querySelectorAll('button')).some(b => (b.getAttribute('onclick') || '').indexOf(fnName) === 0);
-        if (has && window.innerWidth > 900) return;
-        const b = document.createElement('button');
-        b.dataset.zdx = '1';
-        b.title = 'Close ' + label + ' (Esc)';
-        b.className = 'zd-x-safe';
-        b.style.cssText = 'position:absolute;top:7px;right:8px;width:34px;height:34px;border-radius:99px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:6;';
-        b.textContent = '×';
-        b.onclick = (e) => { e.stopPropagation(); try { window[fnName](); } catch (err) {} };
-        head.style.position = 'relative';
-        head.appendChild(b);
+        const all = Array.from(head.querySelectorAll('button')).filter(b =>
+            (b.getAttribute('onclick') || '').indexOf(fnPrefix) === 0 ||
+            b.dataset.zdx === '1' ||
+            (b.textContent.trim() === '×' && !b.dataset.keep));
+        all.forEach((b, i) => { if (i < all.length - 1) b.remove(); });
+        const keep = all[all.length - 1];
+        if (keep) { keep.dataset.keep = '1'; keep.className = 'zdvh-x'; keep.innerHTML = X_SVG; keep.title = 'Close (Esc)'; keep.onclick = (e) => { e.stopPropagation(); window[fnPrefix]&&window[fnPrefix](); }; }
     }
-    function syncCloses() {
-        if (window.innerWidth > 900) { document.querySelectorAll('[data-zdx]').forEach(x => x.remove()); return; }
-        ensureClose('canvas-modal', 'closeCanvas', 'canvas');
-        ensureClose('templates-modal', 'closeTemplates', 'templates');
-        ensureClose('kanban-modal', 'closeKanban', 'board');
-        ensureClose('eis-modal', 'closeEisenhower', 'matrix');
-        ensureClose('calendar-modal', 'closeCalendar', 'calendar');
-        ensureClose('home-modal', 'closeHome', 'home');
-    }
-    ['openCanvas', 'openTemplates', 'openKanban', 'openEisenhower', 'openCalendar', 'openHome'].forEach(fn => {
-        const o = window[fn];
-        if (typeof o !== 'function') return;
-        window[fn] = function () { const r = o.apply(this, arguments); setTimeout(syncCloses, 260); return r; };
-    });
-    window.addEventListener('resize', () => setTimeout(syncCloses, 120));
-    setTimeout(syncCloses, 1200);
 
-    /* --- canvas: re-fit after the header reflows on small screens --- */
+    /* ---------- 2. rebuild CANVAS header ---------- */
+    function fixCanvas() {
+        const m = document.getElementById('canvas-modal'); if (!m || m.dataset.zd59b) return;
+        const head = m.querySelector('.zd-view-head'); if (!head) return;
+        m.dataset.zd59b = '1';
+        head.style.flexWrap = 'nowrap';
+        const acts = head.querySelector('div');
+        if (!acts) return;
+        const btns = Array.from(acts.children);
+        const closeBtn = btns.find(b => (b.getAttribute('onclick') || '').indexOf('closeCanvas') === 0);
+        const zoomOut = btns.find(b => (b.getAttribute('onclick') || '').indexOf('canvasZoom(0.85') === 0);
+        const zoomIn = btns.find(b => (b.getAttribute('onclick') || '').indexOf('canvasZoom(1.18') === 0);
+        const fit = btns.find(b => (b.getAttribute('onclick') || '').indexOf('canvasFit') === 0);
+        const lbl = document.getElementById('canvas-zoom-label');
+        const tools = btns.filter(b => /canvasAdd(Text|Frame|Note)/.test(b.getAttribute('onclick') || ''));
+
+        /* row 2 holds every tool */
+        const row2 = document.createElement('div');
+        row2.className = 'zdvh-row2 on';
+        const zw = document.createElement('span');
+        zw.className = 'zdvh-zoom';
+        if (zoomOut) { zoomOut.className = ''; zw.appendChild(zoomOut); }
+        if (lbl) { lbl.className = 'zdvh-lbl'; zw.appendChild(lbl); }
+        if (zoomIn) { zoomIn.className = ''; zw.appendChild(zoomIn); }
+        row2.appendChild(zw);
+        if (fit) { fit.className = ''; row2.appendChild(fit); }
+        tools.forEach(b => { b.className = ''; row2.appendChild(b); });
+
+        /* row 1: title + help + single close */
+        acts.className = 'zdvh-act';
+        acts.innerHTML = '';
+        const help = document.createElement('button');
+        help.dataset.vh = 'canvas'; help.className = 'zd-help-b'; help.title = 'How the canvas works';
+        help.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M9.2 9.4A3 3 0 0112 7.6c1.7 0 3 1 3 2.3 0 1.1-1 2-2.3 2.2-.4.1-.7.4-.7.9m0 3h.01"/></svg>';
+        help.onclick = (e) => { e.stopPropagation(); if (window.startTour) startTour('canvas'); };
+        acts.appendChild(help);
+        const x = document.createElement('button');
+        x.dataset.keep = '1'; x.className = 'zdvh-x'; x.title = 'Close canvas (Esc)'; x.innerHTML = X_SVG;
+        x.onclick = (e) => { e.stopPropagation(); closeCanvas(); };
+        acts.appendChild(x);
+        if (closeBtn) closeBtn.remove();
+        head.insertAdjacentElement('afterend', row2);
+        const st = document.getElementById('canvas-status');
+        if (st) { st.style.fontSize = '9.5px'; row2.appendChild(st); }
+    }
+
+    /* ---------- 3. rebuild TEMPLATES header ---------- */
+    function fixTemplates() {
+        const m = document.getElementById('templates-modal'); if (!m || m.dataset.zd59b) return;
+        const head = m.querySelector('.zd-view-head'); if (!head) return;
+        m.dataset.zd59b = '1';
+        const acts = head.querySelector('div'); if (!acts) return;
+        const btns = Array.from(acts.children);
+        const closeBtn = btns.find(b => (b.getAttribute('onclick') || '').indexOf('closeTemplates') === 0);
+        const others = btns.filter(b => b !== closeBtn);
+
+        const row2 = document.createElement('div');
+        row2.className = 'zdvh-row2 on';
+        others.forEach(b => { b.className = ''; row2.appendChild(b); });
+
+        acts.className = 'zdvh-act';
+        acts.innerHTML = '';
+        const help = document.createElement('button');
+        help.dataset.vh = 'templates'; help.className = 'zd-help-b'; help.title = 'How templates work';
+        help.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M9.2 9.4A3 3 0 0112 7.6c1.7 0 3 1 3 2.3 0 1.1-1 2-2.3 2.2-.4.1-.7.4-.7.9m0 3h.01"/></svg>';
+        help.onclick = (e) => { e.stopPropagation(); if (window.startTour) startTour('templates'); };
+        acts.appendChild(help);
+        const x = document.createElement('button');
+        x.dataset.keep = '1'; x.className = 'zdvh-x'; x.title = 'Close templates (Esc)'; x.innerHTML = X_SVG;
+        x.onclick = (e) => { e.stopPropagation(); closeTemplates(); };
+        acts.appendChild(x);
+        if (closeBtn) closeBtn.remove();
+        head.insertAdjacentElement('afterend', row2);
+    }
+
+    /* ---------- 4. normalise the other view headers ---------- */
+    function normalise(modalId, fn, label, tourKey) {
+        const m = document.getElementById(modalId); if (!m) return;
+        const head = m.querySelector('.zd-view-head'); if (!head) return;
+        dedupeCloses(modalId, fn);
+        let wrap = head.querySelector('.zdvh-act');
+        const keep = head.querySelector('[data-keep]');
+        if (!wrap) {
+            wrap = document.createElement('span');
+            wrap.className = 'zdvh-act';
+            head.appendChild(wrap);
+        }
+        if (tourKey && !head.querySelector('[data-vh="' + tourKey + '"]')) {
+            const help = document.createElement('button');
+            help.dataset.vh = tourKey; help.className = 'zd-help-b'; help.title = 'How this works';
+            help.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M9.2 9.4A3 3 0 0112 7.6c1.7 0 3 1 3 2.3 0 1.1-1 2-2.3 2.2-.4.1-.7.4-.7.9m0 3h.01"/></svg>';
+            help.onclick = (e) => { e.stopPropagation(); if (window.startTour) startTour(tourKey); };
+            wrap.appendChild(help);
+        }
+        if (keep && keep.parentElement !== wrap) wrap.appendChild(keep);
+        head.querySelectorAll('.zd-help-b').forEach(b => { if (b.parentElement !== wrap) wrap.appendChild(b); });
+    }
+
+    function runAll() {
+        fixCanvas(); fixTemplates();
+        normalise('calendar-modal', 'closeCalendar', 'calendar', 'calendar');
+        normalise('kanban-modal', 'closeKanban', 'board', 'kanban');
+        normalise('eis-modal', 'closeEisenhower', 'matrix', 'eis');
+        normalise('home-modal', 'closeHome', 'home', 'home');
+    }
+    ['openCanvas', 'openTemplates', 'openCalendar', 'openKanban', 'openEisenhower', 'openHome'].forEach(fn => {
+        const o = window[fn]; if (typeof o !== 'function') return;
+        window[fn] = function () { const r = o.apply(this, arguments); setTimeout(runAll, 240); return r; };
+    });
+    setTimeout(runAll, 1200);
+    window.addEventListener('resize', () => setTimeout(runAll, 150));
+
+    /* canvas re-fit after the header reflows / rotation */
     const _oc = window.openCanvas;
     if (typeof _oc === 'function') window.openCanvas = async function () {
         const r = await _oc.apply(this, arguments);
-        [320, 700].forEach(t => setTimeout(() => { try { if (Object.keys(cv.items).length) canvasFit(); applyStageTransform(); } catch (e) {} }, t));
+        [340, 760].forEach(t => setTimeout(() => { try { if (Object.keys(cv.items).length) canvasFit(); applyStageTransform(); } catch (e) {} }, t));
         return r;
     };
-    window.addEventListener('orientationchange', () => {
-        setTimeout(() => {
-            const m = document.getElementById('canvas-modal');
-            if (m && m.classList.contains('open')) { try { canvasFit(); } catch (e) {} }
-        }, 420);
-    });
-})();    
-
+    window.addEventListener('orientationchange', () => setTimeout(() => {
+        const m = document.getElementById('canvas-modal');
+        if (m && m.classList.contains('open')) { try { canvasFit(); } catch (e) {} }
+    }, 420));
+})();   
         
     /* ============================================================
        INIT
