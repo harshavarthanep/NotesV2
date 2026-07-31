@@ -10705,6 +10705,208 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         }, { passive: true });
     })();
 })();    
+
+    // New Code
+
+    /* ============================================================
+   V5.4 — LOCK OVERLAY & INSTANT CROSS-DEVICE LOCKING
+   • Veil covers the ENTIRE note area (paper + scroll region)
+   • Softer blur (16px → 7px) so it reads as frosted, not opaque
+   • Locking/unlocking reflects on every open device instantly
+     (dedicated per-note snapshot listener, not the debounced list)
+   • More aesthetic lock card: frosted panel, shield lines, hints
+============================================================ */
+(function zd54() {
+    if (window.__zd54) return; window.__zd54 = true;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* --- full-coverage veil: fills the whole editor region --- */
+    #lk-veil{position:absolute!important;inset:0!important;z-index:60!important;
+        display:none;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:22px;
+        background:rgba(18,18,22,.34)!important;backdrop-filter:blur(7px) saturate(.9)!important;-webkit-backdrop-filter:blur(7px) saturate(.9)!important;}
+    html:not(.dark) #lk-veil{background:rgba(244,239,230,.44)!important;}
+    #lk-veil.on{display:flex!important;animation:fadeIn .2s ease-out;}
+    /* the paper itself gets a gentle blur so text is unreadable but the layout still shows */
+    body.zd-locked #paper-container .ql-editor{filter:blur(5px) opacity(.55);pointer-events:none;user-select:none;}
+    body.zd-locked #toolbar,body.zd-locked #ruler-wrap,body.zd-locked #fold-gutter{display:none!important;}
+    /* --- frosted lock card --- */
+    #lk-card{max-width:330px;width:100%;padding:26px 22px 22px;border-radius:22px;
+        background:var(--surface-color);border:1px solid var(--border-color);
+        box-shadow:0 26px 64px rgba(0,0,0,.34);position:relative;overflow:hidden;}
+    #lk-card::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;background-image:var(--zd-grad);}
+    #lk-ring{width:70px;height:70px;margin:0 auto 15px;border-radius:99px;display:flex;align-items:center;justify-content:center;
+        background-image:var(--zd-grad);box-shadow:0 12px 32px rgba(0,0,0,.34);position:relative;}
+    #lk-ring::after{content:'';position:absolute;inset:-8px;border-radius:99px;border:2px solid rgb(var(--accent-rgb) / .42);animation:lkPulse 2.2s ease-out infinite;}
+    @keyframes lkPulse{0%{transform:scale(.92);opacity:.85}70%{transform:scale(1.2);opacity:0}100%{opacity:0}}
+    #lk-ring svg{animation:lkWob 4s ease-in-out infinite;}
+    @keyframes lkWob{0%,88%,100%{transform:rotate(0)}92%{transform:rotate(-8deg)}96%{transform:rotate(8deg)}}
+    #lk-card .lk-t{font-size:15.5px;font-weight:800;color:var(--text-color);}
+    #lk-card .lk-s{font-size:11.5px;color:#9ca3af;margin:5px 0 16px;line-height:1.55;}
+    #lk-card .lk-b{width:100%;padding:11px 0;border-radius:14px;font-size:12.5px;font-weight:800;color:#fff;
+        background-image:var(--zd-grad);box-shadow:0 9px 24px rgba(0,0,0,.3);display:inline-flex;align-items:center;justify-content:center;gap:7px;}
+    #lk-card .lk-b:active{transform:scale(.975);}
+    #lk-card .lk-hint{margin-top:12px;padding-top:11px;border-top:1px solid var(--border-color);font-size:9.5px;color:#9ca3af;display:flex;align-items:center;justify-content:center;gap:5px;line-height:1.45;}
+    </style>`);
+
+    /* rebuild the veil inside the editor wrapper so it covers everything */
+    const wrap = document.getElementById('editor-wrapper');
+    const old = document.getElementById('lk-veil');
+    if (old) old.remove();
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    wrap.insertAdjacentHTML('beforeend', `<div id="lk-veil"><div id="lk-card">
+        <span id="lk-ring"><svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 018 0v4"/></svg></span>
+        <div class="lk-t">This note is locked</div>
+        <div class="lk-s" id="lk-sub">Enter its password to read and edit it.</div>
+        <button class="lk-b" id="lk-btn"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 018 0v4"/></svg>Unlock note</button>
+        <div class="lk-hint"><svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m0-9a4 4 0 014 4v1H8v-1a4 4 0 014-4z"/><circle cx="12" cy="12" r="9"/></svg><span>Stored safely in your account · syncs to every device</span></div>
+    </div></div>`);
+
+    const veil = document.getElementById('lk-veil');
+    const isLk = d => !!(d && d.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(d.id)));
+    let veilId = null, lkUnsub = null;
+
+    window.zdShowVeil = function (d) {
+        veilId = d.id;
+        document.getElementById('lk-sub').innerHTML = 'Enter the password for <b>' + escapeHtml(d.title || 'this note') + '</b> to read and edit it.';
+        document.body.classList.add('zd-locked');
+        veil.classList.add('on');
+        try { quill.enable(false); } catch (e) {}
+        els.title.readOnly = true;
+        [els.downBtn, els.dupBtn, els.shareBtn].forEach(b => { if (b) b.disabled = true; });
+    };
+    window.zdHideVeil = function () {
+        veilId = null;
+        document.body.classList.remove('zd-locked');
+        veil.classList.remove('on');
+        try { if (!state.isGuest && !state.reading) quill.enable(true); } catch (e) {}
+        if (!state.isGuest) { els.title.readOnly = false; [els.downBtn, els.dupBtn, els.shareBtn].forEach(b => { if (b) b.disabled = false; }); }
+    };
+    document.getElementById('lk-btn').onclick = () => {
+        if (!veilId) return;
+        const d = state.docs.find(x => x.id === veilId) || { id: veilId, title: els.title.value };
+        try { lockOpenUI('unlock', veilId, 'Enter the password for <b>' + escapeHtml(d.title || 'this note') + '</b>.'); } catch (e) {}
+    };
+
+    /* --- INSTANT cross-device lock: a dedicated listener on the open note --- */
+    function watchLock(id) {
+        if (lkUnsub) { lkUnsub(); lkUnsub = null; }
+        if (!id || state.isGuest || !state.user) return;
+        lkUnsub = db.collection('users').doc(state.user.uid).collection('docs').doc(id)
+            .onSnapshot(snap => {
+                if (!snap.exists) return;
+                const s = snap.data();
+                const d = state.docs.find(x => x.id === id);
+                if (d) { d.lockHash = s.lockHash || null; d.lockSalt = s.lockSalt || null; }
+                const lockedNow = !!(s.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(id)));
+                if (lockedNow && !veil.classList.contains('on')) {
+                    try { quill.setContents('', 'silent'); } catch (e) {}
+                    zdShowVeil({ id: id, title: s.title });
+                    showToast('🔒 Note locked — password required.', 4000);
+                    try { if (navigator.vibrate) navigator.vibrate(24); } catch (e) {}
+                    try { renderDocs(); } catch (e) {}
+                } else if (!s.lockHash && veil.classList.contains('on')) {
+                    zdHideVeil();
+                    showToast('🔓 Lock removed on another device.', 3500);
+                    if (d) openDoc(id, d);
+                    try { renderDocs(); } catch (e) {}
+                }
+            }, () => {});
+    }
+
+    const _od = window.openDoc;
+    window.openDoc = function (id, data) {
+        if (data && data.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(id))) {
+            const r = _od(id, Object.assign({}, data, { content: '', lockHash: null }));
+            state.docId = id;
+            zdShowVeil(data);
+            watchLock(id);
+            try { lockOpenUI('unlock', id, 'Enter the password for <b>' + escapeHtml(data.title || 'this note') + '</b>.'); } catch (e) {}
+            return r;
+        }
+        zdHideVeil();
+        const r = _od(id, data);
+        watchLock(id);
+        return r;
+    };
+
+    /* locking from THIS device applies immediately, before the round-trip */
+    const _go = document.getElementById('lock-go');
+    if (_go) {
+        const prev = _go.onclick;
+        _go.onclick = async function () {
+            const wasSet = (typeof _lockMode !== 'undefined' && _lockMode === 'set');
+            const id = (typeof _lockDocId !== 'undefined') ? _lockDocId : null;
+            await prev.apply(this, arguments);
+            if (wasSet && id) {
+                try { renderDocs(); } catch (e) {}
+                showToast('🔒 Locked everywhere — other devices are updating now.', 3800);
+            }
+        };
+    }
+})();
+
+    /* ============================================================
+   V5.5 — IDLE-BASED SAVING (Google Docs behaviour)
+   Your app already skips no-op writes via computeSaveSig(), so
+   "type then undo" never wrote. What this adds is real savings:
+   the 1s debounce becomes a 2.2s idle window with a 12s ceiling,
+   so a 60-second burst of typing costs ~5 writes instead of ~40.
+   Safety: flush on blur, note switch, tab hide, and page unload —
+   data can never be lost.
+============================================================ */
+(function zd55() {
+    if (window.__zd55) return; window.__zd55 = true;
+
+    const IDLE = 2200;   /* save this long after the last keystroke */
+    const MAX  = 12000;  /* never wait longer than this while typing */
+    let firstEdit = 0;
+
+    window.triggerSave = function () {
+        if (!state.docId || state.isGuest) return;
+        if (document.body.classList.contains('zd-locked')) return;
+        if (computeSaveSig() === state.lastSavedSig) {   /* genuine no-op → nothing queued */
+            state.dirty = false;
+            if (state.saveTimer) { clearTimeout(state.saveTimer); state.saveTimer = null; }
+            firstEdit = 0;
+            setStatus(state.offlineMode ? 'offline' : 'saved', state.offlineMode ? 'Offline — unsaved edits' : 'Saved');
+            return;
+        }
+        state.dirty = true;
+        if (state.offlineMode) { setStatus('offline', 'Offline — unsaved edits (Ctrl+S to sync)'); return; }
+        if (!firstEdit) firstEdit = Date.now();
+        setStatus('saving', 'Editing…');
+        if (state.saveTimer) clearTimeout(state.saveTimer);
+        const waited = Date.now() - firstEdit;
+        state.saveTimer = setTimeout(() => {
+            setStatus('saving', 'Saving…');
+            firstEdit = 0;
+            saveToDb();
+        }, waited >= MAX ? 0 : Math.min(IDLE, MAX - waited));
+    };
+
+    /* --- guaranteed flushes so nothing is ever lost --- */
+    function flush() {
+        if (!state.dirty || !state.docId || state.isGuest || state.offlineMode) return;
+        if (state.saveTimer) { clearTimeout(state.saveTimer); state.saveTimer = null; }
+        firstEdit = 0;
+        saveToDb();
+    }
+    window.zdFlushSave = flush;
+
+    quill.root.addEventListener('blur', () => setTimeout(flush, 60));
+    els.title.addEventListener('blur', () => setTimeout(flush, 60));
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', (e) => {
+        if (state.dirty && !state.offlineMode) { flush(); e.preventDefault(); e.returnValue = ''; }
+    });
+    const _od2 = window.openDoc;
+    window.openDoc = function (id, data) { flush(); return _od2(id, data); };
+    /* pressing Enter in the title, or Ctrl+S, still saves at once */
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key || '').toLowerCase() === 's') setTimeout(flush, 40);
+    }, true);
+})();    
         
     /* ============================================================
        INIT
