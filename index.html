@@ -12625,6 +12625,282 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 1400);
 })();    
 
+    // New Code
+
+    /* ============================================================
+   V6.2 — THREE TARGETED FIXES
+   1 Sidebar views row → exactly as it was before V6.1
+   2 Templates "Your templates": name + ✏ / Use / 🗑 on ONE line
+     (V6.0 forced the title to width:100%, pushing them below)
+   3 Ruler margins actually work — CSS-variable driven, so nothing
+     can override the padding, with document-level drag, a live
+     px badge, and a numeric fallback popover
+============================================================ */
+(function zd62() {
+    if (window.__zd62) return; window.__zd62 = true;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ============ 1) VIEWS ROW — restored to the original ============ */
+    #views-row{position:sticky!important;top:0!important;z-index:20!important;
+        margin:0 -0.25rem 0.5rem 0.25rem!important;
+        padding:0.25rem 0.25rem 0.5rem!important;
+        background:#1e1e1e;box-shadow:0 6px 8px -6px rgba(0,0,0,.45);}
+    html:not(.dark) #views-row{background:#f7f2e7;box-shadow:0 6px 8px -6px rgba(120,100,60,.25);}
+    #views-row > div{display:flex!important;grid-template-columns:none!important;gap:6px!important;}
+    #views-row .zd-view-btn{flex:1 1 0!important;min-width:0;padding:8px 2px;border-radius:10px!important;}
+    #views-row .zd-view-btn span{font-size:8px;overflow:visible;text-overflow:clip;}
+
+    /* ============ 2) TEMPLATES — one row, never wrapping ============ */
+    #tpl-user > div{display:flex!important;flex-wrap:nowrap!important;row-gap:0!important;
+        align-items:center;gap:8px;}
+    #tpl-user > div > span:first-child{width:auto!important;flex:1 1 auto;min-width:0;overflow:hidden;}
+    #tpl-user > div > span:last-child{flex:0 0 auto!important;flex-wrap:nowrap;}
+    @media (max-width:900px){
+        #tpl-user > div{padding:8px 9px!important;gap:6px;}
+        #tpl-user > div > span:first-child{font-size:11px;}
+        #tpl-user .tpl-use{padding:4px 9px!important;font-size:9.5px!important;}
+        #tpl-user .tpl-ren,#tpl-user .tpl-del{width:24px!important;height:24px!important;}
+        #tpl-user .tpl-ren svg,#tpl-user .tpl-del svg{width:11px!important;height:11px!important;}
+    }
+    @media (max-width:380px){ #tpl-user > div > span:first-child svg{display:none;} }
+
+    /* ============ 3) RULER MARGINS ============ */
+    /* Variables win over every stylesheet rule, desktop only —
+       mobile keeps its own 20px padding untouched. */
+    @media (min-width:851px){
+        #paper-container .ql-editor{
+            padding-left:var(--zd-ml,96px)!important;
+            padding-right:var(--zd-mr,96px)!important;}
+    }
+    #ruler{overflow:visible!important;cursor:default;}
+    #ruler .handle{width:20px!important;margin-left:-3px;touch-action:none;z-index:9!important;
+        display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;}
+    #ruler .handle::after{width:3px!important;height:17px!important;border-radius:2px;
+        background:rgb(var(--accent-rgb))!important;transition:height .12s ease;}
+    #ruler .handle:hover::after,#ruler .handle.zd-drag::after{height:24px!important;filter:brightness(1.15);}
+    #ruler .handle.zd-drag{cursor:ew-resize;}
+    #zd-mbadge{position:fixed;z-index:150;display:none;padding:3px 8px;border-radius:6px;
+        background:#111827;color:#fff;font-size:10px;font-weight:800;pointer-events:none;
+        font-variant-numeric:tabular-nums;box-shadow:0 4px 12px rgba(0,0,0,.35);}
+    #zd-mbadge.on{display:block;}
+    #ruler-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;
+        padding:2px 0 3px;font-size:9px;line-height:1;}
+    #ruler-foot button{color:var(--text-color);opacity:.45;transition:opacity .15s ease,color .15s ease;
+        background:transparent;border:none;padding:0;font-size:9px;cursor:pointer;}
+    #ruler-foot button:hover{opacity:.9;color:rgb(var(--accent-rgb));}
+    #zd-mpop{position:fixed;z-index:151;display:none;width:196px;padding:12px;
+        background:var(--surface-color);border:1px solid var(--border-color);border-radius:12px;
+        box-shadow:0 18px 44px rgba(0,0,0,.3);}
+    #zd-mpop.on{display:block;animation:fadeIn .14s ease-out;}
+    #zd-mpop input{width:100%;background:var(--bg-color);border:1px solid var(--border-color);
+        border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text-color);outline:none;
+        caret-color:rgb(var(--accent-rgb));}
+    #zd-mpop input:focus{border-color:rgb(var(--accent-rgb));}
+    #zd-mpop .zd-mp-l{font-size:8.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+        color:#9ca3af;margin-bottom:3px;display:block;}
+    .zd-mp-pre{padding:4px 0;font-size:10px;font-weight:700;border-radius:6px;
+        background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color);}
+    .zd-mp-pre:hover{border-color:rgb(var(--accent-rgb));color:rgb(var(--accent-rgb));}
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="zd-mbadge"></div>
+    <div id="zd-mpop">
+        <div class="grid grid-cols-2 gap-2 mb-2.5">
+            <span><span class="zd-mp-l">Left</span><input id="zd-mp-l" type="number" min="24" max="400" step="4"></span>
+            <span><span class="zd-mp-l">Right</span><input id="zd-mp-r" type="number" min="24" max="400" step="4"></span>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5 mb-2.5">
+            <button class="zd-mp-pre" data-m="48">Narrow</button>
+            <button class="zd-mp-pre" data-m="96">Normal</button>
+            <button class="zd-mp-pre" data-m="144">Wide</button>
+        </div>
+        <button id="zd-mp-ok" class="w-full py-2 text-[11px] font-bold rounded-lg text-white active:scale-[.98] transition" style="background-image:var(--zd-grad)">Apply margins</button>
+    </div>`);
+
+    const W = 794, MIN = 24, MAXPAD = 400, MINTEXT = 120;
+    const $ = id => document.getElementById(id);
+
+    /* ---------- the single source of truth: CSS variables ---------- */
+    function paintVars() {
+        const r = document.documentElement.style;
+        r.setProperty('--zd-ml', state.marginL + 'px');
+        r.setProperty('--zd-mr', state.marginR + 'px');
+        /* strip any leftover inline padding from earlier patches */
+        const ed = document.querySelector('#paper-container .ql-editor');
+        if (ed) { ed.style.removeProperty('padding-left'); ed.style.removeProperty('padding-right'); }
+    }
+    function clampPair(changedLeft) {
+        state.marginL = Math.max(MIN, Math.min(MAXPAD, Math.round(state.marginL)));
+        state.marginR = Math.max(MIN, Math.min(MAXPAD, Math.round(state.marginR)));
+        if (W - state.marginL - state.marginR < MINTEXT) {
+            if (changedLeft) state.marginL = W - state.marginR - MINTEXT;
+            else state.marginR = W - state.marginL - MINTEXT;
+        }
+    }
+    function paintHandles() {
+        const l = $('hL'), r = $('hR'), zl = $('zd-mzL'), zr = $('zd-mzR');
+        if (l) l.style.left = state.marginL + 'px';
+        if (r) r.style.left = (W - state.marginR) + 'px';
+        if (zl) zl.style.width = state.marginL + 'px';
+        if (zr) zr.style.width = state.marginR + 'px';
+    }
+    function badge(show, x, y, txt) {
+        const b = $('zd-mbadge');
+        if (!show) { b.classList.remove('on'); return; }
+        b.textContent = txt;
+        b.style.left = Math.max(8, Math.min(x - 22, window.innerWidth - 70)) + 'px';
+        b.style.top = Math.max(8, y - 34) + 'px';
+        b.classList.add('on');
+    }
+
+    /* ---------- ruler markup + drag ---------- */
+    window.buildRuler = function () {
+        const el = $('ruler'); if (!el) return;
+        const CM = 96 / 2.54;
+        const dark = document.documentElement.classList.contains('dark');
+        const tick = dark ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.3)';
+        const lab = dark ? 'rgba(255,255,255,.4)' : 'rgba(0,0,0,.45)';
+        let h = '<div class="margin-zone" id="zd-mzL" style="left:0;width:' + state.marginL + 'px"></div>'
+              + '<div class="margin-zone" id="zd-mzR" style="right:0;width:' + state.marginR + 'px"></div>';
+        for (let cm = 0; cm <= W / CM; cm += 0.5) {
+            const x = Math.round(cm * CM), maj = (cm % 1 === 0);
+            h += '<div style="position:absolute;left:' + x + 'px;bottom:0;width:1px;height:' + (maj ? 10 : 6) + 'px;background:' + tick + ';pointer-events:none"></div>';
+            if (maj && cm > 0 && x < W - 10)
+                h += '<div style="position:absolute;left:' + (x + 2) + 'px;bottom:10px;font-size:8px;color:' + lab + ';pointer-events:none;line-height:1">' + cm + '</div>';
+        }
+        h += '<div class="handle" id="hL" style="left:' + state.marginL + 'px" title="Drag to set the left margin"></div>'
+           + '<div class="handle" id="hR" style="left:' + (W - state.marginR) + 'px" title="Drag to set the right margin"></div>';
+        el.innerHTML = h;
+        arm('hL', true); arm('hR', false);
+    };
+
+    function arm(id, isLeft) {
+        const g = $(id); if (!g) return;
+        const begin = (clientX, clientY, ev) => {
+            if (state.isGuest || !state.docId) return;
+            if (ev && ev.cancelable) ev.preventDefault();
+            const el = $('ruler'); if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const scale = (rect.width / W) || 1;
+            g.classList.add('zd-drag');
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'ew-resize';
+
+            const step = (cx, cy) => {
+                const px = (cx - rect.left) / scale;
+                if (isLeft) state.marginL = px; else state.marginR = W - px;
+                clampPair(isLeft);
+                paintVars(); paintHandles();
+                badge(true, cx, cy, (isLeft ? 'L ' : 'R ') + Math.round(isLeft ? state.marginL : state.marginR) + 'px');
+            };
+            const pm = (e) => { if (e.cancelable) e.preventDefault(); step(e.clientX, e.clientY); };
+            const tm = (e) => { const t = e.touches[0]; if (!t) return; if (e.cancelable) e.preventDefault(); step(t.clientX, t.clientY); };
+            const end = () => {
+                document.removeEventListener('pointermove', pm, true);
+                document.removeEventListener('pointerup', end, true);
+                document.removeEventListener('pointercancel', end, true);
+                document.removeEventListener('mousemove', pm, true);
+                document.removeEventListener('mouseup', end, true);
+                document.removeEventListener('touchmove', tm, { capture: true });
+                document.removeEventListener('touchend', end, true);
+                g.classList.remove('zd-drag');
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+                badge(false);
+                buildRuler();                                   /* redraw ticks once, at the end */
+                if (state.docId && !state.isGuest) triggerSave();
+                showToast('Margins · left ' + Math.round(state.marginL) + 'px · right ' + Math.round(state.marginR) + 'px');
+            };
+            if (window.PointerEvent) {
+                document.addEventListener('pointermove', pm, true);
+                document.addEventListener('pointerup', end, true);
+                document.addEventListener('pointercancel', end, true);
+            } else {
+                document.addEventListener('mousemove', pm, true);
+                document.addEventListener('mouseup', end, true);
+                document.addEventListener('touchmove', tm, { capture: true, passive: false });
+                document.addEventListener('touchend', end, true);
+            }
+            step(clientX, clientY);
+        };
+        g.addEventListener('pointerdown', (e) => begin(e.clientX, e.clientY, e));
+        g.addEventListener('mousedown', (e) => { if (!window.PointerEvent) begin(e.clientX, e.clientY, e); });
+        g.addEventListener('touchstart', (e) => {
+            if (window.PointerEvent) return;
+            const t = e.touches[0]; if (t) begin(t.clientX, t.clientY, e);
+        }, { passive: false });
+    }
+
+    /* ---------- public API used by the rest of the app ---------- */
+    window.applyMargins = function () { clampPair(true); paintVars(); try { buildRuler(); } catch (e) {} };
+    window.resetMargins = function () {
+        state.marginL = 96; state.marginR = 96;
+        applyMargins();
+        if (state.docId && !state.isGuest) triggerSave();
+        showToast('Margins reset to default.');
+    };
+
+    /* ---------- footer: Set margins… + Reset margins ---------- */
+    (function foot() {
+        const rr = $('ruler-reset'); if (!rr) return;
+        rr.removeAttribute('onclick');
+        rr.id = 'ruler-foot';
+        rr.className = '';
+        rr.innerHTML = '<button id="zd-mset" title="Type exact margins">⇔ Set margins…</button>' +
+                       '<button id="zd-mreset" title="Back to 96px on both sides">↺ Reset margins</button>';
+        $('zd-mreset').onclick = (e) => { e.stopPropagation(); resetMargins(); };
+        $('zd-mset').onclick = (e) => {
+            e.stopPropagation();
+            const pop = $('zd-mpop');
+            if (pop.classList.contains('on')) { pop.classList.remove('on'); return; }
+            $('zd-mp-l').value = Math.round(state.marginL);
+            $('zd-mp-r').value = Math.round(state.marginR);
+            const r = e.currentTarget.getBoundingClientRect();
+            pop.style.left = Math.max(8, Math.min(r.right - 196, window.innerWidth - 204)) + 'px';
+            pop.style.top = (r.bottom + 6) + 'px';
+            pop.classList.add('on');
+            setTimeout(() => { try { $('zd-mp-l').focus(); $('zd-mp-l').select(); zdArmProtect($('zd-mp-l')); } catch (x) {} }, 70);
+        };
+    })();
+    $('zd-mp-ok').onclick = () => {
+        const l = parseInt($('zd-mp-l').value, 10), r = parseInt($('zd-mp-r').value, 10);
+        if (isNaN(l) || isNaN(r)) { showToast('Enter both margins in pixels.'); return; }
+        state.marginL = l; state.marginR = r;
+        applyMargins();
+        if (state.docId && !state.isGuest) triggerSave();
+        $('zd-mpop').classList.remove('on');
+        showToast('Margins · left ' + Math.round(state.marginL) + 'px · right ' + Math.round(state.marginR) + 'px');
+    };
+    document.querySelectorAll('#zd-mpop .zd-mp-pre').forEach(b => {
+        b.onclick = () => { $('zd-mp-l').value = b.dataset.m; $('zd-mp-r').value = b.dataset.m; };
+    });
+    ['zd-mp-l', 'zd-mp-r'].forEach(id => {
+        const i = $(id);
+        i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('zd-mp-ok').click(); } });
+        ['focusin', 'input', 'pointerup'].forEach(ev => i.addEventListener(ev, () => { try { zdArmProtect(i); } catch (x) {} }));
+    });
+    document.addEventListener('click', (e) => {
+        const p = $('zd-mpop');
+        if (p.classList.contains('on') && !e.target.closest('#zd-mpop') && !e.target.closest('#zd-mset')) p.classList.remove('on');
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && $('zd-mpop').classList.contains('on')) {
+            e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            $('zd-mpop').classList.remove('on');
+        }
+    }, true);
+
+    /* ---------- keep the variables in sync on every note open ---------- */
+    const _od = window.openDoc;
+    window.openDoc = function (id, data) {
+        const r = _od(id, data);
+        setTimeout(() => { try { applyMargins(); } catch (e) {} }, 170);
+        return r;
+    };
+    setTimeout(() => { try { applyMargins(); } catch (e) {} }, 1600);
+})();    
+
 
     /* ============================================================
        INIT
