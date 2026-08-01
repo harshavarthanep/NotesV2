@@ -12665,17 +12665,28 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     if (window.__zd62) return; window.__zd62 = true;
 
     document.head.insertAdjacentHTML('beforeend', `<style>
-    /* ============ 1) VIEWS ROW — plain static row, no sticky overlay ============ */
-    #views-row{position:static!important;top:auto!important;z-index:auto!important;
-        margin:0 0 12px 0!important;padding:0 0 10px 0!important;
-        background:transparent!important;box-shadow:none!important;
-        border-bottom:1px solid rgba(127,127,127,0.18)!important;}
-    html:not(.dark) #views-row{background:transparent!important;box-shadow:none!important;}
-    #views-row > div{display:flex!important;grid-template-columns:none!important;gap:6px!important;align-items:stretch;}
-    #views-row .zd-view-btn{flex:1 1 0!important;min-width:0;padding:8px 2px;border-radius:10px!important;
-        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
-    #views-row .zd-view-btn svg{flex-shrink:0;}
-    #views-row .zd-view-btn span{font-size:8px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+    /* ============ 1) VIEWS ROW — sticky, no bubble, full labels ============ */
+    #views-row{position:sticky!important;top:0!important;z-index:20!important;
+        margin:0 0 10px 0!important;padding:6px 0 8px 0!important;
+        background:var(--sidebar-bg,#1e1e1e)!important;
+        box-shadow:none!important;border-bottom:1px solid rgba(127,127,127,0.18)!important;}
+    html:not(.dark) #views-row{background:var(--sidebar-bg,#f7f2e7)!important;}
+    #views-row > div{display:flex!important;grid-template-columns:none!important;
+        gap:0!important;align-items:stretch;}
+    #views-row .zd-view-btn{flex:1 1 0!important;min-width:0;padding:6px 2px 5px!important;
+        background:transparent!important;border:none!important;border-radius:0!important;
+        box-shadow:none!important;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;gap:3px;position:relative;}
+    /* thin divider between each button */
+    #views-row .zd-view-btn + .zd-view-btn::before{content:'';position:absolute;left:0;top:18%;
+        height:64%;width:1px;background:rgba(127,127,127,0.22);border-radius:1px;}
+    #views-row .zd-view-btn svg{width:18px!important;height:18px!important;flex-shrink:0;}
+    #views-row .zd-view-btn span{font-size:8px!important;line-height:1.2;
+        overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important;
+        max-width:none!important;width:auto!important;}
+    #views-row .zd-view-btn:hover{background:rgba(127,127,127,0.10)!important;border-radius:6px!important;}
+    #views-row .zd-view-btn.active,#views-row .zd-view-btn[class*="bg-white"]{
+        background:rgba(127,127,127,0.13)!important;border-radius:6px!important;}
 
     /* ============ 2) TEMPLATES — one row, never wrapping ============ */
     #tpl-user > div{display:flex!important;flex-wrap:nowrap!important;row-gap:0!important;
