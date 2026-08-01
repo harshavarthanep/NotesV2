@@ -11721,9 +11721,25 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         el.className = 'zd-' + kind;
         el.innerHTML = html;
     }
+    // function showSaved(force) {
+    //     const m = lastSaved ? Math.floor((Date.now() - lastSaved) / 60000) : 0;
+    //     pill('saved', TICK + '<span>' + (m < 1 ? 'Saved' : m === 1 ? 'Saved 1 min ago' : 'Saved ' + m + ' min ago') + '</span>');
+    // }
+    function zdAgo(ms) {
+        const m = Math.floor(ms / 60000);
+        if (m < 1) return 'Saved';
+        if (m < 60) return 'Saved ' + m + ' min ago';
+        const h = Math.floor(m / 60);
+        if (h < 24) return 'Saved ' + h + (h === 1 ? ' hour ago' : ' hours ago');
+        const d = Math.floor(h / 24);
+        if (d < 7) return 'Saved ' + d + (d === 1 ? ' day ago' : ' days ago');
+        const w = Math.floor(d / 7);
+        if (w < 5) return 'Saved ' + w + (w === 1 ? ' week ago' : ' weeks ago');
+        const mo = Math.floor(d / 30);
+        return 'Saved ' + mo + (mo === 1 ? ' month ago' : ' months ago');
+    }
     function showSaved(force) {
-        const m = lastSaved ? Math.floor((Date.now() - lastSaved) / 60000) : 0;
-        pill('saved', TICK + '<span>' + (m < 1 ? 'Saved' : m === 1 ? 'Saved 1 min ago' : 'Saved ' + m + ' min ago') + '</span>');
+        pill('saved', TICK + '<span>' + (lastSaved ? zdAgo(Date.now() - lastSaved) : 'Saved') + '</span>');
     }
     /* neutralise every legacy setStatus call so nothing overwrites our pills */
     window.setStatus = function (kind, text) {
@@ -11794,7 +11810,8 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         allowClear = (state.docId !== id);
         const r = _od(id, data);
         setTimeout(() => { allowClear = false; }, 500);
-        lastSaved = Date.now();
+        // lastSaved = Date.now();
+        lastSaved = (data && data.updatedAt && data.updatedAt.toDate) ? data.updatedAt.toDate().getTime() : Date.now();
         setTimeout(() => { if (!state.dirty && !savingNow) showSaved(); }, 120);
         return r;
     };
@@ -12648,15 +12665,17 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     if (window.__zd62) return; window.__zd62 = true;
 
     document.head.insertAdjacentHTML('beforeend', `<style>
-    /* ============ 1) VIEWS ROW — restored to the original ============ */
-    #views-row{position:sticky!important;top:0!important;z-index:20!important;
-        margin:0 -0.25rem 0.5rem 0.25rem!important;
-        padding:0.25rem 0.25rem 0.5rem!important;
-        background:#1e1e1e;box-shadow:0 6px 8px -6px rgba(0,0,0,.45);}
-    html:not(.dark) #views-row{background:#f7f2e7;box-shadow:0 6px 8px -6px rgba(120,100,60,.25);}
-    #views-row > div{display:flex!important;grid-template-columns:none!important;gap:6px!important;}
-    #views-row .zd-view-btn{flex:1 1 0!important;min-width:0;padding:8px 2px;border-radius:10px!important;}
-    #views-row .zd-view-btn span{font-size:8px;overflow:visible;text-overflow:clip;}
+    /* ============ 1) VIEWS ROW — plain static row, no sticky overlay ============ */
+    #views-row{position:static!important;top:auto!important;z-index:auto!important;
+        margin:0 0 12px 0!important;padding:0 0 10px 0!important;
+        background:transparent!important;box-shadow:none!important;
+        border-bottom:1px solid rgba(127,127,127,0.18)!important;}
+    html:not(.dark) #views-row{background:transparent!important;box-shadow:none!important;}
+    #views-row > div{display:flex!important;grid-template-columns:none!important;gap:6px!important;align-items:stretch;}
+    #views-row .zd-view-btn{flex:1 1 0!important;min-width:0;padding:8px 2px;border-radius:10px!important;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
+    #views-row .zd-view-btn svg{flex-shrink:0;}
+    #views-row .zd-view-btn span{font-size:8px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 
     /* ============ 2) TEMPLATES — one row, never wrapping ============ */
     #tpl-user > div{display:flex!important;flex-wrap:nowrap!important;row-gap:0!important;
