@@ -11730,13 +11730,13 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         if (m < 1) return 'Saved';
         if (m < 60) return 'Saved ' + m + ' min ago';
         const h = Math.floor(m / 60);
-        if (h < 24) return 'Saved ' + h + (h === 1 ? ' hrs ago' : ' hrs ago');
+        if (h < 24) return 'Saved ' + h + (h === 1 ? ' hr ago' : ' hrs ago');
         const d = Math.floor(h / 24);
-        if (d < 7) return 'Saved ' + d + (d === 1 ? ' d ago' : ' d's ago');
+        if (d < 7) return 'Saved ' + d + (d === 1 ? ' day ago' : ' days ago');
         const w = Math.floor(d / 7);
-        if (w < 5) return 'Saved ' + w + (w === 1 ? ' wk ago' : ' wk's ago');
+        if (w < 5) return 'Saved ' + w + (w === 1 ? ' wk ago' : ' wks ago');
         const mo = Math.floor(d / 30);
-        return 'Saved ' + mo + (mo === 1 ? ' mo ago' : ' mo's ago');
+        return 'Saved ' + mo + (mo === 1 ? ' mo ago' : ' mos ago');
     }
     function showSaved(force) {
         pill('saved', TICK + '<span>' + (lastSaved ? zdAgo(Date.now() - lastSaved) : 'Saved') + '</span>');
