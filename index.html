@@ -11181,7 +11181,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     }, 1000);
 
     /* ================= QUICK CAPTURE (⚡ note, Alt+N) ================= */
-    const QC_TITLE = '⚡ Quick Capture';
+    const QC_TITLE = 'Quick Capture';
     window.openQuickCapture = () => {
         if (state.isGuest) { showToast('Sign in first.'); return; }
         $('qc-text').value = '';
