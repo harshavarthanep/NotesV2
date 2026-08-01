@@ -12940,62 +12940,65 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
 })();    
 
     // New Code
+
     /* ============================================================
-   V6.3 — READ-FIRST EDIT MODE + POLISH
-   A) Mobile/tablet: notes open in a soft read veil with a floating
-      ✎ pill. Tapping it plays a short "unseal" animation, lifts the
-      blur and enables editing. The pill re-arms after idle / reload.
-   B) Quick Capture: pure SVG, no ⚡ emoji anywhere
-   C) Sidebar header: breathing room around graph/search/new-note
-   D) Help & guide: complete, accurate shortcut reference
+   V6.3a — READ-FIRST EDIT MODE (mobile + tablet)
+   Notes open behind a soft accent-tinted veil with a floating
+   ✎ pill. Tapping it plays a short unseal animation and enables
+   editing. Re-arms after idle, note switch, reload or tab return.
 ============================================================ */
-(function zd63() {
-    if (window.__zd63) return; window.__zd63 = true;
+(function zd63a() {
+    if (window.__zd63a) return; window.__zd63a = true;
 
     /* ───────────────────────────────────────────────────────────
-       ⚙ CUSTOMISE — edit these three numbers to taste
+       ⚙ CUSTOMISE
        ─────────────────────────────────────────────────────────── */
-    const ZD_IDLE_MS   = 5 * 60 * 1000;  // ⚙ IDLE TIMEOUT: how long with no typing before the
-                                         //    read veil returns. 5 min. Use 10*60*1000 for 10 min.
-    const ZD_ANIM_MS   = 620;            // ⚙ ANIMATION LENGTH of the unseal effect, in ms.
-    const ZD_MAX_WIDTH = 1180;           // ⚙ MAX SCREEN WIDTH (px) where this applies.
-                                         //    1180 = phones + tablets. Use 850 for phones only.
+    const ZD_IDLE_MS   = 5 * 60 * 1000;  // ⚙ IDLE TIMEOUT before the veil returns (5 min)
+    const ZD_ANIM_MS   = 620;            // ⚙ UNSEAL ANIMATION length in ms
+    const ZD_MAX_WIDTH = 1180;           // ⚙ MAX SCREEN WIDTH where this applies (850 = phones only)
+    const ZD_PILL_UP   = 132;            // ⚙ PILL HEIGHT above the bottom edge, in px.
+                                         //    Fixed — it never moves when the toolbar switches
+                                         //    position or when the focus timer appears.
     /* ─────────────────────────────────────────────────────────── */
 
     document.head.insertAdjacentHTML('beforeend', `<style>
-    /* ============ A) READ VEIL + EDIT PILL ============ */
     @media (max-width:${ZD_MAX_WIDTH}px){
-      /* the soft veil over the note while locked for reading */
+
+      /* ---------- the read veil ---------- */
       body.zd-read #paper-container .ql-editor{
-          filter:blur(1.5px) saturate(.94);opacity:.9;
+          filter:blur(1px) saturate(.97);opacity:.94;
           transition:filter ${ZD_ANIM_MS}ms cubic-bezier(.22,1,.36,1),opacity ${ZD_ANIM_MS}ms ease;}
       body.zd-read #paper-container{position:relative;}
+
+      /* ⚙ ACCENT TINT — delete this whole rule for a plain, colourless veil */
       body.zd-read #paper-container::after{
           content:'';position:absolute;inset:0;z-index:8;pointer-events:none;
-          background:linear-gradient(180deg,rgb(var(--accent-rgb) / .035),transparent 22%,transparent 78%,rgb(var(--accent-rgb) / .035));
+          background:linear-gradient(165deg,
+              rgb(var(--accent-rgb) / .07) 0%,
+              rgb(var(--accent-rgb) / .028) 38%,
+              rgb(var(--accent-rgb) / .015) 62%,
+              rgb(var(--accent-rgb) / .075) 100%);
           transition:opacity ${ZD_ANIM_MS}ms ease;}
       body.zd-unsealing #paper-container::after{opacity:0;}
-      body.zd-read #toolbar{opacity:.42;pointer-events:none;filter:grayscale(.5);
+      /* ⚙ END ACCENT TINT */
+
+      body.zd-read #toolbar{opacity:.45;pointer-events:none;filter:grayscale(.45);
           transition:opacity ${ZD_ANIM_MS}ms ease,filter ${ZD_ANIM_MS}ms ease;}
 
-      /* the sweep of light that runs down the page on unlock */
+      /* ---------- sweep of light on unlock ---------- */
       #zd-sweep{position:absolute;left:0;right:0;top:0;height:150px;z-index:9;display:none;pointer-events:none;
-          background:linear-gradient(180deg,transparent,rgb(var(--accent-rgb) / .16) 45%,rgb(var(--accent-rgb) / .34) 52%,rgb(var(--accent-rgb) / .16) 60%,transparent);
+          background:linear-gradient(180deg,transparent,rgb(var(--accent-rgb) / .16) 45%,rgb(var(--accent-rgb) / .32) 52%,rgb(var(--accent-rgb) / .16) 60%,transparent);
           filter:blur(1px);}
       #zd-sweep.go{display:block;animation:zdSweep ${ZD_ANIM_MS}ms cubic-bezier(.4,0,.2,1) forwards;}
       @keyframes zdSweep{0%{top:-150px;opacity:0}18%{opacity:1}100%{top:105%;opacity:0}}
 
-      /* the floating edit pill */
-      #zd-editpill{position:fixed;right:16px;z-index:48;display:none;align-items:center;gap:7px;
+      /* ---------- the edit pill: ONE fixed position, always ---------- */
+      #zd-editpill{position:fixed;right:16px;z-index:44;display:none;align-items:center;gap:7px;
+          bottom:calc(${ZD_PILL_UP}px + env(safe-area-inset-bottom,0px))!important;
           padding:10px 16px;border-radius:99px;background-image:var(--zd-grad);color:#fff;
-          font-size:12px;font-weight:800;letter-spacing:.01em;border:none;
+          font-size:12px;font-weight:800;border:none;
           box-shadow:0 10px 26px rgba(0,0,0,.32),0 0 0 0 rgb(var(--accent-rgb) / .45);
-          bottom:calc(20px + env(safe-area-inset-bottom,0px));
-          transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .3s ease;}
-      /* sits ABOVE the focus-timer pill when that one is showing */
-      body.zd-pomo-on #zd-editpill{bottom:calc(72px + env(safe-area-inset-bottom,0px));}
-      body.toolbar-bottom #zd-editpill{bottom:calc(84px + var(--keyboard-offset,0px) + env(safe-area-inset-bottom,0px));}
-      body.toolbar-bottom.zd-pomo-on #zd-editpill{bottom:calc(136px + var(--keyboard-offset,0px) + env(safe-area-inset-bottom,0px));}
+          transition:opacity .2s ease,filter .2s ease;}
       #zd-editpill.on{display:flex;animation:zdPillIn .42s cubic-bezier(.22,1,.36,1),zdPillHalo 2.8s ease-in-out .5s infinite;}
       @keyframes zdPillIn{0%{opacity:0;transform:translateY(16px) scale(.86)}100%{opacity:1;transform:none}}
       @keyframes zdPillHalo{0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.32),0 0 0 0 rgb(var(--accent-rgb) / .42)}
@@ -13004,35 +13007,29 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       @keyframes zdPillBurst{
           0%{transform:none;opacity:1}
           22%{transform:scale(.84) rotate(-8deg)}
-          48%{transform:scale(1.5) rotate(10deg);opacity:.92;
-              box-shadow:0 0 0 26px rgb(var(--accent-rgb) / 0),0 12px 30px rgba(0,0,0,.3)}
+          48%{transform:scale(1.5) rotate(10deg);opacity:.92;box-shadow:0 0 0 26px rgb(var(--accent-rgb) / 0),0 12px 30px rgba(0,0,0,.3)}
           100%{transform:scale(.3) rotate(20deg) translateY(-14px);opacity:0}}
       #zd-editpill svg{width:15px;height:15px;flex-shrink:0;}
       #zd-editpill.go svg{animation:zdQuill ${ZD_ANIM_MS}ms cubic-bezier(.22,1,.36,1);}
       @keyframes zdQuill{0%{transform:none}40%{transform:rotate(-28deg) translate(-3px,3px)}100%{transform:rotate(0)}}
 
-      /* ripple rings that expand from the pill */
-      .zd-ring{position:fixed;z-index:47;border-radius:99px;pointer-events:none;
+      /* the pill blurs away with the note when the sidebar opens */
+      body.zd-sb-open #zd-editpill{opacity:.16;filter:blur(3px);pointer-events:none;}
+      body.zd-sb-open #zd-readhint{display:none!important;}
+
+      .zd-ring{position:fixed;z-index:43;border-radius:99px;pointer-events:none;
           border:2px solid rgb(var(--accent-rgb) / .55);animation:zdRing ${ZD_ANIM_MS}ms cubic-bezier(.2,.8,.3,1) forwards;}
       @keyframes zdRing{0%{width:12px;height:12px;opacity:.9;transform:translate(-50%,-50%)}
                         100%{width:340px;height:340px;opacity:0;transform:translate(-50%,-50%)}}
 
-      /* the toast-style hint when you tap a locked note */
-      #zd-readhint{position:fixed;left:50%;transform:translateX(-50%) translateY(10px);z-index:49;
-          bottom:calc(84px + env(safe-area-inset-bottom,0px));display:none;opacity:0;
+      #zd-readhint{position:fixed;left:50%;transform:translateX(-50%) translateY(10px);z-index:45;
+          bottom:calc(${ZD_PILL_UP + 52}px + env(safe-area-inset-bottom,0px));display:none;opacity:0;
           padding:7px 14px;border-radius:99px;background:rgba(17,24,39,.92);color:#fff;
           font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none;
           transition:opacity .22s ease,transform .28s cubic-bezier(.22,1,.36,1);}
       #zd-readhint.on{display:block;opacity:1;transform:translateX(-50%) translateY(0);}
     }
     @media (min-width:${ZD_MAX_WIDTH + 1}px){ #zd-editpill,#zd-readhint,#zd-sweep{display:none!important;} }
-
-    /* ============ C) SIDEBAR HEADER SPACING ============ */
-    #sidebar > div:first-child{padding:14px 12px 14px 14px!important;gap:8px;}
-    #sidebar > div:first-child > span:first-child{margin-right:4px;}
-    #sidebar > div:first-child > div{gap:4px!important;padding-right:2px;}
-    #sidebar > div:first-child > div > button,
-    #sidebar > div:first-child > div > a{width:32px!important;height:32px!important;flex-shrink:0;}
     </style>`);
 
     document.body.insertAdjacentHTML('beforeend', `
@@ -13050,10 +13047,10 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     const isSmall = () => window.innerWidth <= ZD_MAX_WIDTH;
     let idleT = null, hintT = null, unsealing = false;
 
-    /* ---------- enter the read veil ---------- */
     function seal(reason) {
         if (!isSmall() || state.isGuest || !state.docId) return;
-        if (document.body.classList.contains('zd-locked')) return;   /* password-locked notes have their own veil */
+        if (document.body.classList.contains('zd-locked')) return;
+        if (document.body.classList.contains('zen') || state.reading) return;
         if (document.body.classList.contains('zd-read')) return;
         document.body.classList.add('zd-read');
         try { quill.enable(false); } catch (e) {}
@@ -13063,28 +13060,23 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         clearTimeout(idleT);
         if (reason === 'idle') showToast('Paused editing after 5 minutes — tap the pencil to continue.', 3200);
     }
-    /* ---------- leave it, with the unseal animation ---------- */
     function unseal() {
         if (unsealing || !document.body.classList.contains('zd-read')) return;
         unsealing = true;
         document.body.classList.add('zd-unsealing');
-
-        /* ripple rings from the pill's centre */
         const r = pill.getBoundingClientRect();
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        [0, 110].forEach(delay => setTimeout(() => {
+        [0, 110].forEach(d => setTimeout(() => {
             const ring = document.createElement('span');
             ring.className = 'zd-ring';
             ring.style.left = cx + 'px'; ring.style.top = cy + 'px';
             document.body.appendChild(ring);
             setTimeout(() => ring.remove(), ZD_ANIM_MS + 60);
-        }, delay));
-
+        }, d));
         pill.classList.add('go');
         const sw = document.getElementById('zd-sweep');
         if (sw) { sw.classList.remove('go'); void sw.offsetWidth; sw.classList.add('go'); }
         try { if (navigator.vibrate) navigator.vibrate([9, 40, 16]); } catch (e) {}
-
         setTimeout(() => {
             document.body.classList.remove('zd-read', 'zd-unsealing');
             pill.classList.remove('on', 'go');
@@ -13095,21 +13087,18 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             armIdle();
         }, ZD_ANIM_MS);
     }
-    window.zdSealNote = seal;
-    window.zdUnsealNote = unseal;
-
+    window.zdSealNote = seal; window.zdUnsealNote = unseal;
     pill.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); unseal(); });
 
-    /* tapping the veiled note explains itself instead of doing nothing */
     document.getElementById('editor-wrapper').addEventListener('pointerdown', (e) => {
         if (!document.body.classList.contains('zd-read')) return;
+        if (document.body.classList.contains('zd-sb-open')) return;
         if (e.target.closest('#zd-editpill')) return;
         hint.classList.add('on');
         clearTimeout(hintT);
         hintT = setTimeout(() => hint.classList.remove('on'), 1900);
     }, true);
 
-    /* ---------- idle re-arm ---------- */
     function armIdle() {
         clearTimeout(idleT);
         if (!isSmall() || state.isGuest || !state.docId) return;
@@ -13121,7 +13110,15 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         if (!document.body.classList.contains('zd-read')) armIdle();
     });
 
-    /* ---------- seal on every note open / reload / return to tab ---------- */
+    /* ---------- sidebar open state (so the pill blurs with the note) ---------- */
+    (function watchSidebar() {
+        const sb = document.getElementById('sidebar'); if (!sb) return;
+        const sync = () => document.body.classList.toggle('zd-sb-open',
+            isSmall() && sb.classList.contains('sidebar-open'));
+        new MutationObserver(sync).observe(sb, { attributes: true, attributeFilter: ['class'] });
+        sync();
+    })();
+
     const _od = window.openDoc;
     window.openDoc = function (id, data) {
         const r = _od(id, data);
@@ -13132,18 +13129,16 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         return r;
     };
     document.addEventListener('visibilitychange', () => {
-        /* returning to a backgrounded tab counts as coming back fresh */
         if (document.visibilityState === 'visible' && isSmall()) setTimeout(() => seal('return'), 300);
     });
     window.addEventListener('resize', () => {
         if (!isSmall()) {
             clearTimeout(idleT);
-            document.body.classList.remove('zd-read', 'zd-unsealing');
+            document.body.classList.remove('zd-read', 'zd-unsealing', 'zd-sb-open');
             pill.classList.remove('on', 'go');
             try { if (!state.reading && state.docId && !state.isGuest) quill.enable(true); } catch (e) {}
         }
     });
-    /* zen / reading mode own the editor — stand aside */
     ['toggleZenMode', 'toggleReadingMode'].forEach(fn => {
         const o = window[fn]; if (typeof o !== 'function') return;
         window[fn] = function () {
@@ -13153,20 +13148,16 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             return o.apply(this, arguments);
         };
     });
-    /* keep the focus-timer pill and this one from overlapping */
-    (function trackPomo() {
-        const p = document.getElementById('pomo-pill'); if (!p) return;
-        const sync = () => document.body.classList.toggle('zd-pomo-on', p.classList.contains('show'));
-        new MutationObserver(sync).observe(p, { attributes: true, attributeFilter: ['class'] });
-        sync();
-    })();
     setTimeout(() => seal('boot'), 1800);
+})();
 
-    /* ============================================================
-       B) QUICK CAPTURE — SVG only, no emoji
-    ============================================================ */
+     /* ============================================================
+   V6.3b — QUICK CAPTURE: SVG only, no ⚡ emoji anywhere
+============================================================ */
+(function zd63b() {
+    if (window.__zd63b) return; window.__zd63b = true;
     const QC_OLD = '⚡ Quick Capture', QC_NEW = 'Quick Capture';
-    /* new captures use the clean title */
+
     const _qc = window.qcSave;
     if (typeof _qc === 'function') {
         window.qcSave = async function () {
@@ -13182,7 +13173,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
                     const ops = ((box.content && box.content.ops) || [{ insert: '\n' }]).slice();
                     ops.push({ insert: stamp }, { insert: '\n', attributes: { header: 3 } }, { insert: v + '\n\n' });
                     const upd = { content: { ops }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-                    if ((box.title || '').trim() !== QC_NEW) upd.title = QC_NEW;   /* migrate away from the emoji */
+                    if ((box.title || '').trim() !== QC_NEW) upd.title = QC_NEW;  /* migrate off the emoji title */
                     await db.collection('users').doc(state.user.uid).collection('docs').doc(box.id).update(upd);
                 } else {
                     await db.collection('users').doc(state.user.uid).collection('docs').add({
@@ -13198,20 +13189,17 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             } catch (e) { console.error(e); showToast('Capture failed.'); }
         };
     }
-    /* strip the emoji from every label already on screen */
+
     function deEmoji() {
-        document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button, #feat-list .zd-frow span').forEach(el => {
-            if (el.textContent.indexOf('⚡') >= 0) {
-                el.childNodes.forEach(n => { if (n.nodeType === 3 && n.nodeValue.indexOf('⚡') >= 0) n.nodeValue = n.nodeValue.replace(/⚡/g, '').replace(/\s{2,}/g, ' '); });
-            }
+        document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button, #feat-list .zd-frow span, #palette-results .palette-title').forEach(el => {
+            el.childNodes.forEach(n => {
+                if (n.nodeType === 3 && n.nodeValue.indexOf('⚡') >= 0)
+                    n.nodeValue = n.nodeValue.replace(/⚡/g, '').replace(/\s{2,}/g, ' ').trimEnd();
+            });
         });
-        try {
-            const f = ZD_FEATURES.find(x => x.id === 'qc');
-            if (f) f.label = 'Quick capture';
-        } catch (e) {}
+        try { const f = ZD_FEATURES.find(x => x.id === 'qc'); if (f) f.label = 'Quick capture'; } catch (e) {}
         const ph = document.getElementById('qc-text');
         if (ph) ph.placeholder = 'Dump the thought — it lands in your Quick Capture note…';
-        /* sidebar row: keep the bolt SVG, drop the emoji from the text */
         document.querySelectorAll('#doc-list .doc-row span span').forEach(s => {
             if (s.textContent.indexOf('⚡') >= 0) s.textContent = s.textContent.replace(/⚡\s*/g, '');
         });
@@ -13220,24 +13208,100 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     renderDocs = function () { const r = _rd.apply(this, arguments); setTimeout(deEmoji, 20); return r; };
     const _rf = window.renderFeatures;
     if (typeof _rf === 'function') window.renderFeatures = function () { const r = _rf.apply(this, arguments); setTimeout(deEmoji, 20); return r; };
+    const _pp = window.paintPaletteResults;
+    if (typeof _pp === 'function') window.paintPaletteResults = function () { const r = _pp.apply(this, arguments); setTimeout(deEmoji, 10); return r; };
     setTimeout(deEmoji, 1200);
+})();
 
     /* ============================================================
-       D) HELP — complete shortcut reference
-    ============================================================ */
+   V6.3c — SIDEBAR HEADER SPACING
+   Keeps the wordmark, the offline indicator and the three action
+   buttons evenly spaced whether offline mode is on or off, and
+   stops the new-note button touching the sidebar edge.
+============================================================ */
+(function zd63c() {
+    if (window.__zd63c) return; window.__zd63c = true;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* the header row itself */
+    #sidebar > div:first-child{
+        padding:0 12px 0 14px!important;height:64px!important;gap:10px!important;
+        display:flex!important;align-items:center!important;justify-content:space-between!important;}
+
+    /* wordmark + offline indicator: shrink first, never push the buttons out */
+    #sidebar > div:first-child > span:first-child{
+        min-width:0;flex:1 1 auto;overflow:hidden;gap:6px!important;
+        font-size:17px!important;letter-spacing:.01em;padding-left:0!important;}
+    #offline-indicator{flex-shrink:0;width:14px!important;height:14px!important;}
+
+    /* the three action buttons — fixed size, never squashed, clear of the edge */
+    #sidebar > div:first-child > div{
+        flex:0 0 auto!important;display:flex!important;align-items:center!important;
+        gap:3px!important;margin-right:0!important;}
+    #sidebar > div:first-child > div > button{
+        width:31px!important;height:31px!important;flex-shrink:0!important;padding:0!important;}
+    #sidebar > div:first-child > div > button svg{width:15px!important;height:15px!important;}
+    /* the new-note button keeps a touch more presence */
+    #sidebar > div:first-child > div > button:last-child{width:32px!important;height:32px!important;}
+
+    /* when offline mode is on the indicator appears — tighten the wordmark to compensate */
+    body.zd-offline #sidebar > div:first-child > span:first-child{font-size:15.5px!important;gap:5px!important;}
+    body.zd-offline #sidebar > div:first-child{gap:8px!important;padding-right:11px!important;}
+    body.zd-offline #sidebar > div:first-child > div{gap:2px!important;}
+    body.zd-offline #sidebar > div:first-child > div > button{width:29px!important;height:29px!important;}
+    body.zd-offline #sidebar > div:first-child > div > button:last-child{width:30px!important;height:30px!important;}
+
+    /* very narrow sidebars (small phones) */
+    @media (max-width:360px){
+        #sidebar > div:first-child{padding:0 10px 0 12px!important;gap:6px!important;}
+        #sidebar > div:first-child > span:first-child{font-size:15px!important;}
+        #sidebar > div:first-child > div > button{width:29px!important;height:29px!important;}
+    }
+    </style>`);
+
+    /* mirror offline state onto <body> so the CSS above can react */
+    function syncOffline() {
+        document.body.classList.toggle('zd-offline', !!state.offlineMode);
+    }
+    const _to = window.toggleOfflineMode;
+    if (typeof _to === 'function') {
+        window.toggleOfflineMode = async function () {
+            const r = await _to.apply(this, arguments);
+            setTimeout(syncOffline, 30);
+            return r;
+        };
+    }
+    const _uo = window.updateOfflineUI;
+    if (typeof _uo === 'function') {
+        window.updateOfflineUI = function () { const r = _uo.apply(this, arguments); syncOffline(); return r; };
+    }
+    /* safety net: the indicator's own visibility is the source of truth */
+    (function watchIndicator() {
+        const ind = document.getElementById('offline-indicator'); if (!ind) return;
+        const sync = () => document.body.classList.toggle('zd-offline', !ind.classList.contains('hidden'));
+        new MutationObserver(sync).observe(ind, { attributes: true, attributeFilter: ['class'] });
+        sync();
+    })();
+    setTimeout(syncOffline, 800);
+})();
+
+     /* ============================================================
+   V6.3d — HELP & GUIDE: full, accurate keyboard shortcuts
+============================================================ */
+(function zd63d() {
+    if (window.__zd63d) return; window.__zd63d = true;
     setTimeout(() => {
         const scroll = document.querySelector('#help-modal .overflow-y-auto');
-        if (!scroll || scroll.dataset.zd63) return;
-        scroll.dataset.zd63 = '1';
-        /* remove the outdated shortcut section */
+        if (!scroll || scroll.dataset.zd63d) return;
+        scroll.dataset.zd63d = '1';
         Array.from(scroll.querySelectorAll('section')).forEach(s => {
             const h = s.querySelector('h4');
             if (h && /shortcut/i.test(h.textContent)) s.remove();
         });
-        const K = (k) => '<kbd style="display:inline-block;padding:1px 6px;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-color);font:700 10.5px ui-monospace,monospace;color:var(--text-color);white-space:nowrap">' + k + '</kbd>';
+        const K = k => '<kbd style="display:inline-block;padding:1px 6px;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-color);font:700 10.5px ui-monospace,monospace;color:var(--text-color);white-space:nowrap">' + k + '</kbd>';
         const rows = [
             ['Notes & navigation', [
-                [K('Ctrl') + ' + ' + K('K'), 'Search notes <b>and run actions</b> (type “lock”, “matrix”, “stats”…)'],
+                [K('Ctrl') + ' + ' + K('K'), 'Search notes <b>and run actions</b> — type “lock”, “matrix”, “stats”, “trash”…'],
                 [K('Alt') + ' + ' + K('N'), 'Quick capture — dump a thought into your Quick Capture note'],
                 [K('Alt') + ' + ' + K('←'), 'Recently-viewed notes jump list'],
                 [K('Ctrl') + ' + ' + K('G'), 'Graph view'],
@@ -13245,22 +13309,22 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             ]],
             ['Writing', [
                 [K('Ctrl') + ' + ' + K('Z'), 'Undo'],
-                [K('Ctrl') + ' + ' + K('Y') + ' / ' + K('Ctrl') + ' + ' + K('⇧') + ' + ' + K('Z'), 'Redo'],
+                [K('Ctrl') + ' + ' + K('Y') + ' / ' + K('Ctrl') + '+' + K('⇧') + '+' + K('Z'), 'Redo'],
                 [K('Ctrl') + ' + ' + K('B') + ' · ' + K('I') + ' · ' + K('U'), 'Bold · italic · underline'],
                 [K('Ctrl') + ' + ' + K('S'), 'Save now (or reconnect when offline)'],
                 [K('/'), 'Slash menu — headings, lists, checklist, quote, code, date, time'],
-                [K('[['), 'Link to another note · ' + K('#') + ' tag autocomplete'],
-                [K('↑') + ' ' + K('↓'), 'Move through any popup · ' + K('↵') + ' or ' + K('Tab') + ' inserts']
+                [K('[[') + ' · ' + K('#'), 'Link another note · tag autocomplete'],
+                [K('↑') + ' ' + K('↓') + ' · ' + K('↵') + '/' + K('Tab'), 'Move through any popup · insert the highlighted item']
             ]],
             ['Reading & focus', [
                 [K('Ctrl') + ' + ' + K('E'), 'Reading mode'],
                 [K('Ctrl') + ' + ' + K('.'), 'Zen focus mode'],
-                ['<b>Tap ✎</b>', 'On phones &amp; tablets, notes open protected — tap the pencil pill to edit. It returns after 5 idle minutes or a reload.']
+                ['<b>Tap ✎</b>', 'On phones &amp; tablets notes open protected — tap the pencil pill to edit. It returns after 5 idle minutes or a reload.']
             ]],
             ['Everywhere', [
                 [K('Esc'), 'Closes the topmost layer — dialog, then panel, then view'],
                 [K('Ctrl') + ' + ' + K('Click'), 'Open a [[link]] or #tag directly'],
-                ['<b>Double-click</b>', 'Canvas: new idea card · a folder tile: rename · an image: full-screen viewer']
+                ['<b>Double-click</b>', 'Canvas: new card · folder tile: rename · image: full-screen viewer']
             ]]
         ];
         const sec = document.createElement('section');
@@ -13268,14 +13332,12 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             rows.map(([g, items]) =>
                 '<div class="text-[10px] font-bold uppercase tracking-wider text-muted mt-3 mb-1.5">' + g + '</div>' +
                 '<table style="width:100%;border-collapse:collapse"><tbody>' +
-                items.map(([k, d]) =>
-                    '<tr><td style="padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">' + k + '</td>' +
-                    '<td style="padding:3px 0;font-size:12px;line-height:1.5">' + d + '</td></tr>').join('') +
+                items.map(([k, d]) => '<tr><td style="padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">' + k + '</td><td style="padding:3px 0;font-size:12px;line-height:1.5">' + d + '</td></tr>').join('') +
                 '</tbody></table>').join('') +
-            '<p class="text-[10.5px] text-muted mt-3 leading-snug">On macOS use <b>⌘</b> wherever <b>Ctrl</b> is shown. Any feature you switch off in <b>Features on this device</b> keeps its shortcut disabled too.</p>';
+            '<p class="text-[10.5px] text-muted mt-3 leading-snug">On macOS use <b>⌘</b> wherever <b>Ctrl</b> is shown. Any feature switched off in <b>Features on this device</b> keeps its shortcut disabled too.</p>';
         scroll.appendChild(sec);
     }, 1400);
-})();    
+})();   
 
 
     /* ============================================================
