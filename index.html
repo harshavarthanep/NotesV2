@@ -608,6 +608,15 @@
         <span class="flex items-center gap-2"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Synced with Owner</span>
     </div>
 
+    <style id="zd-load-style">
+      #loading-screen { background: #0e1014; }
+      #loading-screen .zd-load-word { color: #ffffff; }
+      #loading-screen .zd-load-spin {
+        border-color: rgba(255,255,255,0.15);
+        border-top-color: #ffffff;
+      }
+    </style>
+
     <div id="loading-screen" class="absolute inset-0 z-[100] bg-bg flex items-center justify-center transition-opacity duration-500">
         <div class="flex flex-col items-center">
             <div class="text-2xl font-light mb-4 tracking-wide">Zen<span class="text-accent font-bold">Docs</span></div>
@@ -1771,6 +1780,24 @@
             setTimeout(() => okBtn.focus(), 60);
         });
     }
+
+        /* Loading screen follows the saved theme + accent */
+        (function () {
+            try {
+                const theme = localStorage.getItem('zdTheme') || 'dark';
+                const accent = localStorage.getItem('zdAccent') || '#1a73e8';
+                const dark = theme !== 'light';
+                const bg = dark ? '#0e1014' : '#f7f2e7';
+                const text = dark ? '#ffffff' : '#1a1a1a';
+                const spinFaint = dark ? 'rgba(255,255,255,0.13)' : 'rgba(0,0,0,0.12)';
+                const s = document.getElementById('zd-load-style');
+                if (s) s.textContent = [
+                    '#loading-screen{background:' + bg + '}',
+                    '#loading-screen .zd-load-word{color:' + text + '}',
+                    '#loading-screen .zd-load-spin{border-color:' + spinFaint + ';border-top-color:' + accent + '}'
+                ].join('');
+            } catch (e) {}
+        })();
 
     /* ============================================================
        SAVE STATUS UI (with icon states)
@@ -12993,7 +13020,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       @keyframes zdSweep{0%{top:-150px;opacity:0}18%{opacity:1}100%{top:105%;opacity:0}}
 
       /* ---------- the edit pill: ONE fixed position, always ---------- */
-      #zd-editpill{position:fixed;right:16px;z-index:38;display:none;align-items:center;gap:7px;
+      #zd-editpill{position:fixed;right:16px;z-index:36;display:none;align-items:center;gap:7px;
           bottom:calc(${ZD_PILL_UP}px + env(safe-area-inset-bottom,0px))!important;
           padding:10px 16px;border-radius:99px;background-image:var(--zd-grad);color:#fff;
           font-size:12px;font-weight:800;border:none;
@@ -13017,6 +13044,8 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       body.zd-sb-open #zd-editpill,
       body.zd-sb-open #pomo-pill{opacity:.16;filter:blur(3px);pointer-events:none;}
       body.zd-sb-open #zd-readhint{display:none!important;}
+      #more-menu{z-index:42!important;}
+      #mobile-menu-dropdown{z-index:42!important;}
 
       .zd-ring{position:fixed;z-index:43;border-radius:99px;pointer-events:none;
           border:2px solid rgb(var(--accent-rgb) / .55);animation:zdRing ${ZD_ANIM_MS}ms cubic-bezier(.2,.8,.3,1) forwards;}
@@ -13238,19 +13267,14 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     /* the three action buttons — fixed size, never squashed, clear of the edge */
     #sidebar > div:first-child > div{
         flex:0 0 auto!important;display:flex!important;align-items:center!important;
-        gap:3px!important;margin-right:0!important;}
+        gap:2px!important;margin-right:0!important;margin-left:auto!important;}
     #sidebar > div:first-child > div > button{
         width:31px!important;height:31px!important;flex-shrink:0!important;padding:0!important;}
     #sidebar > div:first-child > div > button svg{width:15px!important;height:15px!important;}
-    /* the new-note button keeps a touch more presence */
     #sidebar > div:first-child > div > button:last-child{width:32px!important;height:32px!important;}
 
     /* when offline mode is on the indicator appears — tighten the wordmark to compensate */
-    body.zd-offline #sidebar > div:first-child > span:first-child{font-size:15.5px!important;gap:5px!important;}
-    body.zd-offline #sidebar > div:first-child{gap:8px!important;padding-right:11px!important;}
-    body.zd-offline #sidebar > div:first-child > div{gap:2px!important;}
-    body.zd-offline #sidebar > div:first-child > div > button{width:29px!important;height:29px!important;}
-    body.zd-offline #sidebar > div:first-child > div > button:last-child{width:30px!important;height:30px!important;}
+    
 
     /* very narrow sidebars (small phones) */
     @media (max-width:360px){
