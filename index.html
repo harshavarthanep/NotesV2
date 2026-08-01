@@ -12395,7 +12395,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     #ruler-wrap{border-radius:0!important;}
     #paper-container{border-radius:3px!important;}
     @media (max-width:850px){#paper-container{border-radius:0!important;}}
-    #toolbar.ql-toolbar{border-radius:24px!important;}
+    @media (min-width:851px){ #toolbar.ql-toolbar{border-radius:24px!important;} }
     .zd-tool,#toolbar .ql-formats button{border-radius:5px!important;}
     .zd-size input{border-radius:5px!important;}
     .ql-editor img{border-radius:5px!important;}
