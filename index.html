@@ -12993,7 +12993,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       @keyframes zdSweep{0%{top:-150px;opacity:0}18%{opacity:1}100%{top:105%;opacity:0}}
 
       /* ---------- the edit pill: ONE fixed position, always ---------- */
-      #zd-editpill{position:fixed;right:16px;z-index:44;display:none;align-items:center;gap:7px;
+      #zd-editpill{position:fixed;right:16px;z-index:38;display:none;align-items:center;gap:7px;
           bottom:calc(${ZD_PILL_UP}px + env(safe-area-inset-bottom,0px))!important;
           padding:10px 16px;border-radius:99px;background-image:var(--zd-grad);color:#fff;
           font-size:12px;font-weight:800;border:none;
@@ -13014,7 +13014,8 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       @keyframes zdQuill{0%{transform:none}40%{transform:rotate(-28deg) translate(-3px,3px)}100%{transform:rotate(0)}}
 
       /* the pill blurs away with the note when the sidebar opens */
-      body.zd-sb-open #zd-editpill{opacity:.16;filter:blur(3px);pointer-events:none;}
+      body.zd-sb-open #zd-editpill,
+      body.zd-sb-open #pomo-pill{opacity:.16;filter:blur(3px);pointer-events:none;}
       body.zd-sb-open #zd-readhint{display:none!important;}
 
       .zd-ring{position:fixed;z-index:43;border-radius:99px;pointer-events:none;
