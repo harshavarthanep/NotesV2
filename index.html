@@ -13118,7 +13118,61 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         }, ZD_ANIM_MS);
     }
     window.zdSealNote = seal; window.zdUnsealNote = unseal;
+    // pill.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); unseal(); });
+
+    // New Code
+    
     pill.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); unseal(); });
+
+    /* hide both pills whenever any dropdown/menu is open */
+    function pillsOff() {
+        pill.style.opacity = '0';
+        pill.style.pointerEvents = 'none';
+        const pp = document.getElementById('pomo-pill');
+        if (pp) { pp.style.opacity = '0'; pp.style.pointerEvents = 'none'; }
+    }
+    function pillsOn() {
+        pill.style.opacity = '';
+        pill.style.pointerEvents = '';
+        const pp = document.getElementById('pomo-pill');
+        if (pp) { pp.style.opacity = ''; pp.style.pointerEvents = ''; }
+    }
+    /* watch every dropdown that can appear over the editor */
+    const MENUS = ['more-menu', 'mobile-menu-dropdown', 'folder-menu', 'font-picker', 'color-picker'];
+    MENUS.forEach(id => {
+        const m = document.getElementById(id); if (!m) return;
+        new MutationObserver(() => {
+            const anyOpen = MENUS.some(mid => {
+                const el = document.getElementById(mid);
+                if (!el) return false;
+                const s = el.style.display || getComputedStyle(el).display;
+                const vis = el.style.visibility || getComputedStyle(el).visibility;
+                return s !== 'none' && vis !== 'hidden' && el.classList.contains('open');
+            });
+            /* also check block-level visibility for menus that use display:block not .open */
+            const moreVisible = (() => {
+                const mm = document.getElementById('more-menu');
+                if (!mm) return false;
+                const r = mm.getBoundingClientRect();
+                return r.width > 10 && r.height > 10;
+            })();
+            const mobVisible = (() => {
+                const mm = document.getElementById('mobile-menu-dropdown');
+                if (!mm) return false;
+                const r = mm.getBoundingClientRect();
+                return r.width > 10 && r.height > 10;
+            })();
+            if (anyOpen || moreVisible || mobVisible) pillsOff(); else pillsOn();
+        }, { attributes: true, attributeFilter: ['class', 'style'], childList: true });
+    });
+    /* polling fallback — checks every 180ms, costs almost nothing */
+    setInterval(() => {
+        const mm = document.getElementById('more-menu');
+        const mob = document.getElementById('mobile-menu-dropdown');
+        const mmOpen = mm && mm.getBoundingClientRect().height > 10;
+        const mobOpen = mob && mob.getBoundingClientRect().height > 10;
+        if (mmOpen || mobOpen) pillsOff(); else pillsOn();
+    }, 180);
 
     document.getElementById('editor-wrapper').addEventListener('pointerdown', (e) => {
         if (!document.body.classList.contains('zd-read')) return;
