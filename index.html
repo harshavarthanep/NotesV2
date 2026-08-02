@@ -14428,7 +14428,11 @@ window.zdScrollToNode = function (node) {
     };
     for (let i = 0; i < 13; i++) $('vc-bars').insertAdjacentHTML('beforeend', '<i></i>');
 
-    let rec = null, listening = false, finalText = '', interim = '', wantOn = false;
+    let rec = null, listening = false, wantOn = false;
+    let rawCommitted = '';   /* raw text from previous (auto-restarted) sessions */
+    let rawSession = '';     /* raw finals of the CURRENT session, rebuilt every event */
+    let interim = '';        /* non-final words currently being heard */
+    let finalText = '';      /* cleaned, display-ready text */
     let audioCtx = null, analyser = null, micStream = null, rafId = null;
 
     /* spoken punctuation → characters */
@@ -14541,14 +14545,18 @@ window.zdScrollToNode = function (node) {
             try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
         };
         rec.onresult = (e) => {
-            interim = '';
-            for (let i = e.resultIndex; i < e.results.length; i++) {
-                const txt = e.results[i][0].transcript;
-                if (e.results[i].isFinal) {
-                    finalText = (finalText + ' ' + txt).replace(/\s{2,}/g, ' ').trimStart();
-                    finalText = clean(finalText);
-                } else interim += txt;
+            /* rebuild from scratch — e.results is cumulative, so appending
+               incrementally duplicates words when resultIndex doesn't advance */
+            let fin = '', itm = '';
+            for (let i = 0; i < e.results.length; i++) {
+                const r = e.results[i];
+                if (!r || !r[0]) continue;
+                const txt = r[0].transcript || '';
+                if (r.isFinal) fin += txt + ' '; else itm += txt + ' ';
             }
+            rawSession = fin;
+            interim = itm.trim();
+            finalText = clean((rawCommitted + ' ' + rawSession).replace(/\s{2,}/g, ' ').trim());
             paint();
         };
         // rec.onerror = (e) => {
@@ -14576,7 +14584,11 @@ window.zdScrollToNode = function (node) {
             listening = false;
             $('vc-orb').classList.remove('live');
             stopLevels();
-            if (wantOn) { try { rec.start(); return; } catch (e) {} }   /* auto-restart: browsers cut off after ~60s */
+            /* fold this session into the committed buffer, then reset it —
+               the next session starts with a fresh, empty e.results */
+            rawCommitted = (rawCommitted + ' ' + rawSession).replace(/\s{2,}/g, ' ').trim();
+            rawSession = ''; interim = '';
+            if (wantOn) { try { rec.start(); return; } catch (e) {} }
             $('vc-go').textContent = 'Start listening';
             $('vc-state').textContent = finalText ? 'Paused — insert it, or keep going.' : 'Tap the microphone and start speaking.';
         };
@@ -14590,8 +14602,17 @@ window.zdScrollToNode = function (node) {
         stopLevels();
         $('vc-go').textContent = 'Start listening';
     }
-    window.vcToggle = () => { listening ? stop() : start(); };
-    window.vcClear = () => { finalText = ''; interim = ''; paint(); $('vc-state').textContent = 'Cleared.'; };
+    let _vcBusy = false;
+    window.vcToggle = () => {
+        if (_vcBusy) return;                    /* blocks the orb + button double-fire */
+        _vcBusy = true;
+        setTimeout(() => { _vcBusy = false; }, 450);
+        listening ? stop() : start();
+    };
+    window.vcClear = () => {
+        rawCommitted = ''; rawSession = ''; interim = ''; finalText = '';
+        paint(); $('vc-state').textContent = 'Cleared.';
+    };
     window.vcInsert = () => {
         const t = (finalText + ' ' + interim).trim();
         if (!t) { showToast('Nothing captured yet.'); return; }
@@ -14603,7 +14624,7 @@ window.zdScrollToNode = function (node) {
         quill.insertText(at, t + ' ', 'user');
         quill.setSelection(at + t.length + 1, 0, 'silent');
         try { scanInlineTokens(true); } catch (e) {}
-        finalText = ''; interim = ''; paint();
+        rawCommitted = ''; rawSession = ''; interim = ''; finalText = ''; paint();
         closeVoice();
         showToast('Added ' + t.split(/\s+/).length + ' words to your note.');
     };
@@ -14633,6 +14654,836 @@ window.zdScrollToNode = function (node) {
         ZD_FEAT_ICONS.voice = '<rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/>';
     } catch (e) {}
     setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 600);
+})();    
+
+   // New Code
+
+    /* ============================================================
+   V8.0 — TRACKERS CORE  ·  "THE GRID"
+   Habits (good & bad) · Gym/workout · Pet & garden
+   Tunnel transition · Alt+T shortcut · per-tracker calendars
+   BMI gauge · streaks · year progress · cyberpunk encouragement
+   Firestore: users/{uid}/trackers/{id}
+   V8.1 (robot) and V8.2 (consequences) mount into this.
+============================================================ */
+(function zd80() {
+    if (window.__zd80) return; window.__zd80 = true;
+
+    /* ───────────────────────────────────────────────────────────
+       ⚙ CUSTOMISE
+       ─────────────────────────────────────────────────────────── */
+    const TRK_TUNNEL_MS = 720;    // ⚙ tunnel transition length (ms)
+    const TRK_MARQUEE_S = 26;     // ⚙ encouragement marquee loop (seconds)
+    /* ─────────────────────────────────────────────────────────── */
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ============ TUNNEL ============ */
+    #trk-tunnel{position:fixed;inset:0;z-index:210;display:none;overflow:hidden;background:#04060a;
+        perspective:520px;}
+    #trk-tunnel.on{display:block;}
+    #trk-tunnel .tn-r{position:absolute;left:50%;top:50%;width:180px;height:180px;margin:-90px 0 0 -90px;
+        border-radius:26px;border:2px solid rgb(var(--accent-rgb) / .75);
+        box-shadow:0 0 26px rgb(var(--accent-rgb) / .5),inset 0 0 26px rgb(var(--accent-rgb) / .22);}
+    #trk-tunnel.in .tn-r{animation:tnIn ${TRK_TUNNEL_MS}ms cubic-bezier(.5,0,.75,0) forwards;}
+    #trk-tunnel.out .tn-r{animation:tnOut ${TRK_TUNNEL_MS}ms cubic-bezier(.25,1,.5,1) forwards;}
+    @keyframes tnIn{0%{transform:translateZ(-1400px) rotate(0deg);opacity:0}
+                    30%{opacity:1}100%{transform:translateZ(700px) rotate(24deg);opacity:0}}
+    @keyframes tnOut{0%{transform:translateZ(700px) rotate(24deg);opacity:0}
+                     40%{opacity:1}100%{transform:translateZ(-1400px) rotate(0deg);opacity:0}}
+    #trk-tunnel .tn-core{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;
+        border-radius:99px;background:#fff;box-shadow:0 0 40px 16px rgb(var(--accent-rgb) / .85);
+        animation:tnCore ${TRK_TUNNEL_MS}ms ease-in forwards;}
+    @keyframes tnCore{0%{transform:scale(.2);opacity:.4}70%{transform:scale(1);opacity:1}
+                      100%{transform:scale(90);opacity:0}}
+    #trk-tunnel .tn-lbl{position:absolute;left:0;right:0;bottom:14%;text-align:center;color:#fff;
+        font-size:10px;font-weight:800;letter-spacing:.44em;text-transform:uppercase;opacity:.75;
+        animation:tnBlink .5s steps(2) infinite;}
+    @keyframes tnBlink{50%{opacity:.25}}
+
+    /* ============ SECTION SHELL ============ */
+    #trk-modal{position:fixed;inset:0;z-index:118;display:none;flex-direction:column;
+        background:#080b11;color:#e8ecf5;}
+    #trk-modal.open{display:flex;animation:trkIn .34s cubic-bezier(.22,1,.36,1);}
+    @keyframes trkIn{0%{opacity:0;transform:scale(1.03)}100%{opacity:1;transform:none}}
+    html:not(.dark) #trk-modal{background:#0b0e15;}
+    #trk-modal::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+        background:radial-gradient(700px 420px at 12% 6%,rgb(var(--accent-rgb) / .2),transparent 60%),
+                   radial-gradient(560px 380px at 92% 94%,rgb(var(--accent-rgb) / .14),transparent 58%);}
+    #trk-modal::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.5;
+        background:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 3px);}
+    #trk-modal > *{position:relative;z-index:2;}
+    .trk-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+        padding:0 12px;min-height:54px;border-bottom:1px solid rgba(255,255,255,.09);flex-shrink:0;
+        background:rgba(8,11,17,.8);backdrop-filter:blur(10px);}
+    .trk-t{font-size:14px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+        background-image:var(--zd-grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+    .trk-b{width:30px;height:30px;border-radius:99px;display:inline-flex;align-items:center;
+        justify-content:center;color:#8b93a1;transition:all .15s ease;flex-shrink:0;}
+    .trk-b svg{width:16px;height:16px;}
+    .trk-b:hover{color:rgb(var(--accent-rgb));background:rgb(var(--accent-rgb) / .14);}
+    .trk-x{width:32px;height:32px;border-radius:99px;display:flex;align-items:center;justify-content:center;
+        font-size:21px;line-height:1;color:#8b93a1;flex-shrink:0;transition:all .15s ease;}
+    .trk-x:hover{color:#ff5f57;background:rgba(255,95,87,.13);}
+
+    /* ============ MARQUEE ============ */
+    #trk-marq{overflow:hidden;white-space:nowrap;flex-shrink:0;padding:7px 0;
+        border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);}
+    #trk-marq span{display:inline-block;padding-left:100%;font-size:11px;font-weight:800;
+        letter-spacing:.16em;text-transform:uppercase;color:rgb(var(--accent-rgb));
+        text-shadow:0 0 14px rgb(var(--accent-rgb) / .55);
+        animation:trkMarq ${TRK_MARQUEE_S}s linear infinite;}
+    @keyframes trkMarq{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+
+    /* ============ TABS ============ */
+    #trk-tabs{display:flex;gap:5px;padding:10px 12px 0;overflow-x:auto;flex-shrink:0;
+        -webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    #trk-tabs::-webkit-scrollbar{display:none;}
+    .trk-tab{flex:0 0 auto;padding:7px 14px;border-radius:99px;font-size:11px;font-weight:800;
+        color:#8b93a1;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);
+        transition:all .16s ease;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+    .trk-tab svg{width:13px;height:13px;}
+    .trk-tab:hover{color:#e8ecf5;border-color:rgba(255,255,255,.24);}
+    .trk-tab.on{background-image:var(--zd-grad);color:#fff;border-color:transparent;
+        box-shadow:0 5px 18px rgb(var(--accent-rgb) / .38);}
+
+    /* ============ BODY ============ */
+    #trk-body{flex:1;min-height:0;overflow-y:auto;padding:12px;padding-bottom:80px;}
+    .trk-wrap{max-width:940px;margin:0 auto;}
+    /* stats strip */
+    .trk-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;}
+    @media(max-width:560px){.trk-strip{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    .trk-kpi{border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:11px 12px;
+        background:rgba(255,255,255,.035);position:relative;overflow:hidden;
+        animation:kpiIn .4s cubic-bezier(.22,1,.36,1) both;}
+    @keyframes kpiIn{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}
+    .trk-kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background-image:var(--zd-grad);}
+    .trk-kpi b{display:block;font-size:21px;font-weight:900;line-height:1.1;color:#fff;
+        font-variant-numeric:tabular-nums;}
+    .trk-kpi span{font-size:8.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#7d8695;}
+    /* year bar */
+    .trk-year{border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px;margin-bottom:14px;
+        background:rgba(255,255,255,.035);}
+    .trk-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden;position:relative;}
+    .trk-bar i{display:block;height:100%;border-radius:99px;background-image:var(--zd-grad);
+        box-shadow:0 0 14px rgb(var(--accent-rgb) / .65);transition:width .9s cubic-bezier(.22,1,.36,1);}
+    .trk-bar::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);
+        transform:translateX(-100%);animation:trkShine 2.6s ease-in-out infinite;}
+    @keyframes trkShine{0%{transform:translateX(-100%)}65%,100%{transform:translateX(100%)}}
+
+    /* ============ CARDS ============ */
+    #trk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:11px;}
+    @media(max-width:600px){#trk-grid{grid-template-columns:1fr;}}
+    .tc{border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:13px;position:relative;
+        background:rgba(255,255,255,.038);overflow:hidden;transition:transform .18s ease,border-color .18s ease;
+        animation:kpiIn .42s cubic-bezier(.22,1,.36,1) both;}
+    .tc:hover{transform:translateY(-3px);border-color:rgb(var(--accent-rgb) / .5);}
+    .tc::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--tc-c,rgb(var(--accent-rgb)));
+        box-shadow:0 0 12px var(--tc-c,rgb(var(--accent-rgb)));}
+    .tc-ico{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+        flex-shrink:0;background:color-mix(in srgb,var(--tc-c,#4a9eff) 18%,transparent);color:var(--tc-c,#4a9eff);}
+    @supports not (background:color-mix(in srgb,red 10%,blue)){.tc-ico{background:rgba(255,255,255,.09);}}
+    .tc-ico svg{width:17px;height:17px;}
+    .tc-n{font-size:13px;font-weight:800;color:#fff;line-height:1.25;}
+    .tc-s{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7d8695;}
+    .tc-flame{font-size:10px;font-weight:900;padding:2px 8px;border-radius:99px;flex-shrink:0;
+        background:rgba(255,167,38,.16);color:#ffa726;}
+    .tc-dots{display:flex;gap:4px;margin:11px 0 10px;}
+    .tc-dots i{flex:1;height:22px;border-radius:5px;background:rgba(255,255,255,.07);position:relative;
+        transition:all .2s ease;}
+    .tc-dots i.hit{background:var(--tc-c,#4a9eff);box-shadow:0 0 9px var(--tc-c,#4a9eff);}
+    .tc-dots i.bad{background:#ff5f57;box-shadow:0 0 9px #ff5f57;}
+    .tc-dots i.today{outline:2px solid rgba(255,255,255,.42);outline-offset:1px;}
+    .tc-go{flex:1;padding:8px 0;border-radius:11px;font-size:11px;font-weight:800;color:#fff;
+        background-image:var(--zd-grad);transition:transform .14s ease;}
+    .tc-go:active{transform:scale(.96);}
+    .tc-go.done{background:rgba(255,255,255,.09);background-image:none;color:#7d8695;}
+    .tc-go.warn{background:linear-gradient(135deg,#ff5f57,#ff8a4c);background-image:linear-gradient(135deg,#ff5f57,#ff8a4c);}
+    .tc-mini{width:34px;padding:8px 0;border-radius:11px;font-size:11px;font-weight:800;
+        background:rgba(255,255,255,.07);color:#8b93a1;transition:all .15s ease;}
+    .tc-mini:hover{background:rgba(255,255,255,.14);color:#fff;}
+
+    /* ============ CALENDAR ============ */
+    .trk-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+    .trk-cal .cd{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;
+        font-size:9.5px;font-weight:700;background:rgba(255,255,255,.05);color:#6b7280;position:relative;
+        cursor:pointer;transition:all .15s ease;}
+    .trk-cal .cd:hover{background:rgba(255,255,255,.13);color:#fff;}
+    .trk-cal .cd.hit{background:var(--tc-c,#4a9eff);color:#04060a;box-shadow:0 0 10px var(--tc-c,#4a9eff);}
+    .trk-cal .cd.bad{background:#ff5f57;color:#fff;box-shadow:0 0 10px rgba(255,95,87,.75);}
+    .trk-cal .cd.clean{background:rgba(74,222,128,.85);color:#04060a;box-shadow:0 0 10px rgba(74,222,128,.6);}
+    .trk-cal .cd.today{outline:2px solid #fff;outline-offset:1px;}
+    .trk-cal .cd.void{opacity:0;pointer-events:none;}
+    .trk-cal .cd.future{opacity:.3;pointer-events:none;}
+    .trk-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:5px;}
+    .trk-dow span{text-align:center;font-size:8px;font-weight:800;letter-spacing:.06em;color:#5a6472;}
+
+    /* ============ GAUGE ============ */
+    .bmi-wrap{position:relative;width:190px;margin:0 auto;}
+    #bmi-needle{transform-origin:100px 92px;transition:transform 1.1s cubic-bezier(.22,1,.36,1);}
+    .bmi-v{position:absolute;left:0;right:0;bottom:8px;text-align:center;}
+    .bmi-v b{display:block;font-size:26px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
+    .bmi-v span{font-size:8.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;}
+
+    /* ============ SHEETS ============ */
+    .trk-sheet{position:fixed;inset:0;z-index:124;display:none;align-items:center;justify-content:center;
+        background:rgba(2,4,8,.76);backdrop-filter:blur(7px);padding:14px;}
+    .trk-sheet.open{display:flex;animation:trkIn .22s ease-out;}
+    .trk-box{width:100%;max-width:420px;max-height:88vh;overflow-y:auto;border-radius:18px;padding:16px;
+        background:#0d1119;border:1px solid rgba(255,255,255,.12);color:#e8ecf5;
+        box-shadow:0 28px 70px rgba(0,0,0,.6);animation:boxIn .28s cubic-bezier(.22,1,.36,1);}
+    .trk-l{display:block;font-size:8.5px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;
+        color:#7d8695;margin:11px 0 5px;}
+    .trk-i{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);
+        border-radius:10px;padding:9px 11px;font-size:13px;color:#e8ecf5;outline:none;
+        caret-color:rgb(var(--accent-rgb));}
+    @media(max-width:850px){.trk-i{font-size:16px;}}
+    .trk-i:focus{border-color:rgb(var(--accent-rgb));}
+    .trk-i::placeholder{color:#5a6472;}
+    .trk-pick{display:flex;flex-wrap:wrap;gap:5px;}
+    .trk-p{padding:6px 11px;border-radius:9px;font-size:11px;font-weight:700;color:#8b93a1;
+        background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11);transition:all .15s ease;}
+    .trk-p:hover{color:#fff;border-color:rgba(255,255,255,.3);}
+    .trk-p.on{background-image:var(--zd-grad);color:#fff;border-color:transparent;}
+    .trk-int{display:flex;gap:5px;}
+    .trk-int button{flex:1;padding:9px 0;border-radius:9px;font-size:14px;font-weight:900;
+        background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11);color:#5a6472;transition:all .15s ease;}
+    .trk-int button.on{color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+    .trk-int button:nth-child(1).on{background:#4ade80}.trk-int button:nth-child(2).on{background:#a3e635}
+    .trk-int button:nth-child(3).on{background:#fbbf24}.trk-int button:nth-child(4).on{background:#fb923c}
+    .trk-int button:nth-child(5).on{background:#ef4444}
+    .trk-cta{width:100%;padding:11px 0;border-radius:12px;font-size:12.5px;font-weight:900;color:#fff;
+        background-image:var(--zd-grad);margin-top:14px;transition:transform .14s ease;}
+    .trk-cta:active{transform:scale(.98);}
+    .trk-ghost{width:100%;padding:9px 0;border-radius:12px;font-size:11px;font-weight:800;margin-top:6px;
+        background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11);color:#8b93a1;}
+    #trk-fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:120;
+        width:54px;height:54px;border-radius:99px;display:none;align-items:center;justify-content:center;
+        font-size:27px;color:#fff;background-image:var(--zd-grad);
+        box-shadow:0 12px 30px rgba(0,0,0,.45),0 0 0 0 rgb(var(--accent-rgb) / .5);
+        animation:fabHalo 2.8s ease-in-out infinite;}
+    #trk-modal.open ~ #trk-fab{display:flex;}
+    @keyframes fabHalo{0%,100%{box-shadow:0 12px 30px rgba(0,0,0,.45),0 0 0 0 rgb(var(--accent-rgb) / .45)}
+                       65%{box-shadow:0 12px 30px rgba(0,0,0,.45),0 0 0 14px rgb(var(--accent-rgb) / 0)}}
+    .trk-empty{text-align:center;padding:46px 20px;color:#5a6472;}
+    .trk-empty svg{width:44px;height:44px;margin:0 auto 12px;opacity:.4;}
+    /* V8.1 mounts here */
+    #trk-robo{margin-bottom:13px;}
+    </style>`);
+
+    /* ============ ICONS & CATALOGUE ============ */
+    const I = {
+        good:  '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>',
+        bad:   '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L2.4 17a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/>',
+        gym:   '<path stroke-linecap="round" stroke-linejoin="round" d="M6.5 6.5v11M3.5 9v6M17.5 6.5v11M20.5 9v6M6.5 12h11"/>',
+        pet:   '<path stroke-linecap="round" stroke-linejoin="round" d="M12 21s-7-4.4-7-9.6A4.4 4.4 0 0112 8.4a4.4 4.4 0 017 3C19 16.6 12 21 12 21z"/>',
+        grid:  '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+        help:  '<circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M9.2 9.4A3 3 0 0112 7.6c1.7 0 3 1 3 2.3 0 1.1-1 2-2.3 2.2-.4.1-.7.4-.7.9m0 3h.01"/>',
+        cal:   '<rect x="3" y="5" width="18" height="16" rx="2"/><path stroke-linecap="round" d="M8 3v4m8-4v4M3 10h18"/>',
+        scale: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v3m-7 3h14l2 12H3L5 9zm7 3a3 3 0 100 6 3 3 0 000-6z"/>'
+    };
+    const KIND = {
+        good: { n: 'Good habit',    c: '#4ade80', i: I.good, verb: 'Done today' },
+        bad:  { n: 'Break a habit', c: '#ff5f57', i: I.bad,  verb: 'I slipped' },
+        gym:  { n: 'Workout',       c: '#38bdf8', i: I.gym,  verb: 'Log session' },
+        pet:  { n: 'Pet & garden',  c: '#a78bfa', i: I.pet,  verb: 'Log care' }
+    };
+    const LINES = [
+        'DISCIPLINE IS FREEDOM · SHOW UP AGAIN TODAY',
+        'SMALL REPS COMPOUND · THE GRID REMEMBERS EVERYTHING',
+        'YOU ARE ONE ENTRY AWAY FROM A BETTER STREAK',
+        'MOTIVATION FADES · SYSTEMS ENDURE · KEEP LOGGING',
+        'THE VERSION OF YOU IN A YEAR IS WATCHING RIGHT NOW',
+        'CONSISTENCY BEATS INTENSITY · EVERY SINGLE TIME',
+        'DON\u2019T BREAK THE CHAIN · NOT TODAY',
+        'PROGRESS IS QUIET · THEN IT IS OBVIOUS',
+        'YOU DO NOT RISE TO GOALS · YOU FALL TO SYSTEMS'
+    ];
+    const WORKOUTS = ['Push', 'Pull', 'Legs', 'Chest', 'Back', 'Shoulders', 'Arms', 'Core', 'Cardio', 'HIIT', 'Yoga', 'Swim', 'Run', 'Cycle', 'Full body', 'Rest'];
+    const CARE = ['Fed', 'Watered', 'Walked', 'Played', 'Groomed', 'Cleaned', 'Pruned', 'Fertilised', 'Repotted', 'Vet / check'];
+
+    /* ============ DOM ============ */
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="trk-tunnel"><span class="tn-core"></span><div class="tn-lbl">entering the grid</div></div>
+
+    <div id="trk-modal">
+      <div class="trk-head">
+        <span class="flex items-center gap-1">
+          <button class="trk-b" onclick="trkTour()" title="How this works"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${I.help}</svg></button>
+        </span>
+        <span class="flex items-center gap-2 min-w-0">
+          <svg class="w-4 h-4 flex-shrink-0" style="color:rgb(var(--accent-rgb))" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${I.grid}</svg>
+          <span class="trk-t">The Grid</span>
+        </span>
+        <button class="trk-x" onclick="closeTrackers()" title="Exit (Esc)">×</button>
+      </div>
+      <div id="trk-marq"><span id="trk-marq-t"></span></div>
+      <div id="trk-tabs"></div>
+      <div id="trk-body"><div class="trk-wrap">
+        <div id="trk-robo"></div>
+        <div id="trk-stats"></div>
+        <div id="trk-grid"></div>
+      </div></div>
+    </div>
+    <button id="trk-fab" onclick="trkNew()" title="New tracker">+</button>
+
+    <div id="trk-edit" class="trk-sheet"><div class="trk-box" id="trk-edit-box"></div></div>
+    <div id="trk-log" class="trk-sheet"><div class="trk-box" id="trk-log-box"></div></div>
+    <div id="trk-detail" class="trk-sheet"><div class="trk-box" id="trk-detail-box"></div></div>
+    <div id="trk-tourwrap" class="trk-sheet"><div class="trk-box" id="trk-tour-box"></div></div>`);
+
+    /* ============ STATE ============ */
+    const $ = id => document.getElementById(id);
+    let TRK = [];            /* tracker docs */
+    let BODY = { h: 0, w: [] }; /* height cm + [{d,kg}] */
+    let unsub = null, tab = 'all', logId = null, calM = new Date();
+    const key = d => { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+    const TODAY = () => key(new Date());
+    const col = () => db.collection('users').doc(state.user.uid).collection('trackers');
+
+    function streak(t) {
+        let n = 0; const d = new Date();
+        for (let i = 0; i < 400; i++) {
+            const k = key(d), hit = !!(t.logs && t.logs[k]);
+            /* bad habits: a CLEAN day (no entry) is the win */
+            const ok = t.kind === 'bad' ? !hit : hit;
+            if (ok) n++; else if (i > 0 || t.kind === 'bad') break; else break;
+            d.setDate(d.getDate() - 1);
+        }
+        return n;
+    }
+    function monthDone(t, y, m) {
+        let n = 0;
+        Object.keys(t.logs || {}).forEach(k => {
+            const p = k.split('-');
+            if (+p[0] === y && +p[1] === m + 1) n++;
+        });
+        return n;
+    }
+    function bmi() {
+        if (!BODY.h || !BODY.w.length) return null;
+        const kg = BODY.w[BODY.w.length - 1].kg, m = BODY.h / 100;
+        return +(kg / (m * m)).toFixed(1);
+    }
+
+    /* ============ OPEN / CLOSE with the tunnel ============ */
+    window.openTrackers = () => {
+        if (state.isGuest) { showToast('Sign in to use trackers.'); return; }
+        const tn = $('trk-tunnel');
+        tn.querySelectorAll('.tn-r').forEach(n => n.remove());
+        for (let i = 0; i < 7; i++) {
+            const r = document.createElement('span');
+            r.className = 'tn-r';
+            r.style.animationDelay = (i * 78) + 'ms';
+            tn.appendChild(r);
+        }
+        tn.querySelector('.tn-lbl').textContent = 'entering the grid';
+        tn.className = 'on in';
+        try { if (navigator.vibrate) navigator.vibrate([6, 30, 10]); } catch (e) {}
+        setTimeout(() => {
+            try { closeAllViews(); } catch (e) {}
+            $('trk-modal').classList.add('open');
+            marquee(); watch(); render();
+            if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, 700);
+        }, TRK_TUNNEL_MS * 0.62);
+        setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 120);
+    };
+    window.closeTrackers = () => {
+        ['trk-edit', 'trk-log', 'trk-detail', 'trk-tourwrap'].forEach(i => $(i).classList.remove('open'));
+        const tn = $('trk-tunnel');
+        tn.querySelector('.tn-lbl').textContent = 'leaving the grid';
+        tn.className = 'on out';
+        $('trk-modal').classList.remove('open');
+        if (unsub) { unsub(); unsub = null; }
+        setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 60);
+    };
+    function marquee() {
+        const pick = [];
+        const s = LINES.slice().sort(() => Math.random() - 0.5);
+        for (let i = 0; i < 4; i++) pick.push(s[i % s.length]);
+        $('trk-marq-t').textContent = pick.join('   ///   ') + '   ///   ';
+    }
+
+    /* ============ DATA ============ */
+    function watch() {
+        if (unsub) unsub();
+        unsub = col().onSnapshot(snap => {
+            TRK = []; BODY = { h: 0, w: [] };
+            snap.docs.forEach(d => {
+                if (d.id === '_body') { const b = d.data(); BODY = { h: b.h || 0, w: b.w || [] }; return; }
+                TRK.push(Object.assign({ id: d.id }, d.data()));
+            });
+            TRK.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.name || '').localeCompare(b.name || ''));
+            render();
+            try { if (window.zdRoboSync) zdRoboSync(TRK); } catch (e) {}   /* V8.1 hook */
+        }, e => console.warn('[trk]', e));
+    }
+    async function save(id, patch) {
+        try { await col().doc(id).set(patch, { merge: true }); }
+        catch (e) { console.error(e); showToast('Could not save — check your connection.'); }
+    }
+
+    /* ============ RENDER ============ */
+    function render() {
+        if (!$('trk-modal').classList.contains('open')) return;
+        /* tabs */
+        const counts = { all: TRK.length };
+        Object.keys(KIND).forEach(k => counts[k] = TRK.filter(t => t.kind === k).length);
+        $('trk-tabs').innerHTML =
+            [['all', 'All', I.grid]].concat(Object.keys(KIND).map(k => [k, KIND[k].n, KIND[k].i]))
+            .map(([k, n, ic]) => `<button class="trk-tab ${tab === k ? 'on' : ''}" onclick="trkTab('${k}')">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${ic}</svg>${n}
+                ${counts[k] ? '<span style="opacity:.7">' + counts[k] + '</span>' : ''}</button>`).join('');
+
+        /* stats */
+        const now = new Date(), y = now.getFullYear();
+        const start = new Date(y, 0, 1), end = new Date(y, 11, 31);
+        const dayOfYear = Math.floor((now - start) / 864e5) + 1;
+        const totalDays = Math.floor((end - start) / 864e5) + 1;
+        const left = totalDays - dayOfYear;
+        const t2 = TODAY();
+        const active = TRK.filter(t => tab === 'all' || t.kind === tab);
+        const dueToday = active.filter(t => t.kind !== 'bad');
+        const doneToday = dueToday.filter(t => t.logs && t.logs[t2]).length;
+        const slips = active.filter(t => t.kind === 'bad' && t.logs && t.logs[t2]).length;
+        const best = TRK.reduce((m, t) => Math.max(m, streak(t)), 0);
+        let logged = 0; TRK.forEach(t => { logged += Object.keys(t.logs || {}).filter(k => k.indexOf(y + '-') === 0).length; });
+
+        $('trk-stats').innerHTML = `
+        <div class="trk-strip">
+          <div class="trk-kpi" style="animation-delay:0ms"><b>${best}</b><span>Best streak</span></div>
+          <div class="trk-kpi" style="animation-delay:60ms"><b>${doneToday}/${dueToday.length}</b><span>Done today</span></div>
+          <div class="trk-kpi" style="animation-delay:120ms"><b>${logged}</b><span>Entries this year</span></div>
+          <div class="trk-kpi" style="animation-delay:180ms"><b>${slips}</b><span>Slips today</span></div>
+        </div>
+        <div class="trk-year">
+          <div class="flex items-center justify-between mb-2">
+            <span style="font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#7d8695">${y} progress</span>
+            <span style="font-size:10px;font-weight:800;color:rgb(var(--accent-rgb))">${left} days left</span>
+          </div>
+          <div class="trk-bar"><i style="width:${(dayOfYear / totalDays * 100).toFixed(1)}%"></i></div>
+          <div style="font-size:9px;color:#5a6472;margin-top:6px">Day ${dayOfYear} of ${totalDays} · every entry is one you can never lose</div>
+        </div>
+        ${(tab === 'gym' || tab === 'all') ? gauge() : ''}`;
+
+        /* cards */
+        const g = $('trk-grid');
+        if (!active.length) {
+            g.innerHTML = `<div class="trk-empty" style="grid-column:1/-1">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">${I.grid}</svg>
+                <div style="font-size:13px;font-weight:800;color:#8b93a1">Nothing tracked here yet</div>
+                <div style="font-size:11px;margin-top:5px">Tap <b style="color:rgb(var(--accent-rgb))">+</b> to create your first tracker.</div></div>`;
+            return;
+        }
+        g.innerHTML = active.map((t, i) => card(t, i)).join('');
+    }
+    function card(t, i) {
+        const K = KIND[t.kind] || KIND.good;
+        const c = t.color || K.c;
+        const t2 = TODAY();
+        const hit = !!(t.logs && t.logs[t2]);
+        const st = streak(t);
+        /* last 7 days */
+        let dots = '';
+        for (let d = 6; d >= 0; d--) {
+            const dt = new Date(); dt.setDate(dt.getDate() - d);
+            const h = !!(t.logs && t.logs[key(dt)]);
+            const cls = t.kind === 'bad' ? (h ? 'bad' : (d === 0 ? '' : 'hit')) : (h ? 'hit' : '');
+            dots += `<i class="${cls}${d === 0 ? ' today' : ''}"></i>`;
+        }
+        const label = t.kind === 'bad'
+            ? (hit ? 'Slipped today' : 'Clean today \u2713')
+            : (hit ? 'Logged today \u2713' : K.verb);
+        return `<div class="tc" style="--tc-c:${c};animation-delay:${i * 55}ms">
+          <div class="flex items-start gap-2.5">
+            <span class="tc-ico"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${K.i}</svg></span>
+            <span class="min-w-0 flex-1">
+              <span class="tc-n block truncate">${escapeHtml(t.name || 'Untitled')}</span>
+              <span class="tc-s">${K.n}${t.target ? ' · ' + t.target + '×/week' : ''}</span>
+            </span>
+            <span class="tc-flame">${t.kind === 'bad' ? '\u26e8 ' : '\u{1f525} '}${st}d</span>
+          </div>
+          <div class="tc-dots">${dots}</div>
+          <div class="flex gap-1.5">
+            <button class="tc-go ${hit && t.kind !== 'bad' ? 'done' : ''} ${t.kind === 'bad' ? 'warn' : ''}"
+                onclick="trkQuick('${t.id}')">${label}</button>
+            <button class="tc-mini" onclick="trkDetail('${t.id}')" title="Calendar &amp; history">${'\u2637'}</button>
+            <button class="tc-mini" onclick="trkEdit('${t.id}')" title="Edit">${'\u270e'}</button>
+          </div>
+        </div>`;
+    }
+    function gauge() {
+        const b = bmi();
+        const kg = BODY.w.length ? BODY.w[BODY.w.length - 1].kg : null;
+        if (!b) return `<div class="trk-year" style="text-align:center">
+            <div style="font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#7d8695;margin-bottom:8px">Body metrics</div>
+            <button onclick="trkBody()" class="trk-p" style="margin:0 auto">+ Add your height &amp; weight</button></div>`;
+        /* 14 → 40 mapped onto a 180° arc */
+        const ang = Math.max(0, Math.min(180, (b - 14) / 26 * 180)) - 90;
+        const zone = b < 18.5 ? ['Underweight', '#38bdf8'] : b < 25 ? ['Healthy', '#4ade80'] : b < 30 ? ['Overweight', '#fbbf24'] : ['Obese', '#ef4444'];
+        const ideal = BODY.h ? (22 * Math.pow(BODY.h / 100, 2)).toFixed(1) : null;
+        return `<div class="trk-year">
+          <div class="flex items-center justify-between mb-1">
+            <span style="font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#7d8695">Body metrics</span>
+            <button onclick="trkBody()" style="font-size:10px;font-weight:800;color:rgb(var(--accent-rgb))">Update</button>
+          </div>
+          <div class="bmi-wrap">
+            <svg viewBox="0 0 200 108" style="width:100%">
+              <path d="M14 92A86 86 0 0158 21" stroke="#38bdf8" stroke-width="13" fill="none" stroke-linecap="round"/>
+              <path d="M64 18A86 86 0 01118 15" stroke="#4ade80" stroke-width="13" fill="none" stroke-linecap="round"/>
+              <path d="M124 17A86 86 0 01158 40" stroke="#fbbf24" stroke-width="13" fill="none" stroke-linecap="round"/>
+              <path d="M163 47A86 86 0 01186 92" stroke="#ef4444" stroke-width="13" fill="none" stroke-linecap="round"/>
+              <g id="bmi-needle" style="transform:rotate(${ang}deg)">
+                <line x1="100" y1="92" x2="100" y2="30" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+              </g>
+              <circle cx="100" cy="92" r="7" fill="#0d1119" stroke="#fff" stroke-width="2.5"/>
+            </svg>
+            <div class="bmi-v"><b>${b}</b><span style="color:${zone[1]}">${zone[0]}</span></div>
+          </div>
+          <div class="flex justify-between mt-2" style="font-size:9.5px;color:#7d8695">
+            <span>Now <b style="color:#fff">${kg} kg</b></span>
+            ${ideal ? '<span>Healthy target <b style="color:#4ade80">' + ideal + ' kg</b></span>' : ''}
+            <span>Height <b style="color:#fff">${BODY.h} cm</b></span>
+          </div></div>`;
+    }
+    window.trkTab = (k) => { tab = k; render(); };
+
+    /* ============ QUICK LOG ============ */
+    window.trkQuick = (id) => {
+        const t = TRK.find(x => x.id === id); if (!t) return;
+        const k = TODAY();
+        if (t.logs && t.logs[k]) {           /* already logged → open the detail to edit/remove */
+            trkLog(id, k);
+            return;
+        }
+        trkLog(id, k);
+    };
+
+    /* ============ LOG SHEET ============ */
+    let LG = {};
+    window.trkLog = (id, dateKey) => {
+        const t = TRK.find(x => x.id === id); if (!t) return;
+        logId = id;
+        const k = dateKey || TODAY();
+        const ex = (t.logs && t.logs[k]) || {};
+        LG = Object.assign({ date: k, intensity: ex.intensity || 3 }, ex);
+        const K = KIND[t.kind];
+        let fields = '';
+        if (t.kind === 'gym') {
+            fields = `
+            <span class="trk-l">Session</span>
+            <div class="trk-pick" id="lg-class">${WORKOUTS.map(w => `<button class="trk-p ${LG.klass === w ? 'on' : ''}" data-v="${w}">${w}</button>`).join('')}</div>
+            <span class="trk-l">Intensity</span>
+            <div class="trk-int" id="lg-int">${[1,2,3,4,5].map(n => `<button data-v="${n}" class="${LG.intensity === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+            <span class="trk-l">Duration (minutes)</span><input class="trk-i" id="lg-min" type="number" inputmode="numeric" placeholder="45" value="${LG.mins || ''}">
+            <span class="trk-l">Supplements taken</span><input class="trk-i" id="lg-sup" placeholder="Whey, creatine…" value="${escapeHtml(LG.sup || '')}">
+            <span class="trk-l">Food today &amp; calories</span>
+            <textarea class="trk-i" id="lg-food" rows="2" placeholder="Oats, chicken rice, 2 eggs…">${escapeHtml(LG.food || '')}</textarea>
+            <input class="trk-i" id="lg-kcal" type="number" inputmode="numeric" placeholder="Total kcal, e.g. 2200" value="${LG.kcal || ''}" style="margin-top:6px">
+            <span class="trk-l">Body weight today (kg)</span><input class="trk-i" id="lg-kg" type="number" step="0.1" inputmode="decimal" placeholder="72.5" value="${LG.kg || ''}">`;
+        } else if (t.kind === 'pet') {
+            fields = `
+            <span class="trk-l">Care given</span>
+            <div class="trk-pick" id="lg-class">${CARE.map(w => `<button class="trk-p ${LG.klass === w ? 'on' : ''}" data-v="${w}">${w}</button>`).join('')}</div>
+            <span class="trk-l">Amount / detail</span><input class="trk-i" id="lg-amt" placeholder="200 ml water, 1 cup food…" value="${escapeHtml(LG.amt || '')}">
+            <span class="trk-l">How are they doing?</span>
+            <div class="trk-int" id="lg-int">${[1,2,3,4,5].map(n => `<button data-v="${n}" class="${LG.intensity === n ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+        } else {
+            fields = `
+            <span class="trk-l">${t.kind === 'bad' ? 'How strong was the urge?' : 'How well did it go?'}</span>
+            <div class="trk-int" id="lg-int">${[1,2,3,4,5].map(n => `<button data-v="${n}" class="${LG.intensity === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+            ${t.unit ? `<span class="trk-l">${escapeHtml(t.unit)}</span><input class="trk-i" id="lg-amt" placeholder="e.g. 30" value="${escapeHtml(LG.amt || '')}">` : ''}`;
+        }
+        $('trk-log-box').innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="flex items-center gap-2 min-w-0">
+            <span class="tc-ico" style="--tc-c:${t.color || K.c};width:28px;height:28px;border-radius:9px"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${K.i}</svg></span>
+            <span style="font-size:13px;font-weight:900;color:#fff" class="truncate">${escapeHtml(t.name)}</span>
+          </span>
+          <button class="trk-x" onclick="trkCloseSheet('trk-log')">×</button>
+        </div>
+        <div style="font-size:10px;color:#7d8695;margin-bottom:2px">${new Date(k + 'T12:00').toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})}${t.kind==='bad'?' · logging a slip is honesty, not failure':''}</div>
+        ${fields}
+        <span class="trk-l">Note</span>
+        <textarea class="trk-i" id="lg-note" rows="2" placeholder="Anything worth remembering…">${escapeHtml(LG.note || '')}</textarea>
+        <button class="trk-cta" onclick="trkSaveLog()">${(t.logs && t.logs[k]) ? 'Update entry' : 'Save entry'}</button>
+        ${(t.logs && t.logs[k]) ? `<button class="trk-ghost" onclick="trkDelLog('${k}')">Remove this entry</button>` : ''}`;
+        $('trk-log').classList.add('open');
+        wireChips();
+    };
+    function wireChips() {
+        const cl = $('lg-class');
+        if (cl) cl.querySelectorAll('.trk-p').forEach(b => b.onclick = () => {
+            cl.querySelectorAll('.trk-p').forEach(x => x.classList.remove('on'));
+            b.classList.add('on'); LG.klass = b.dataset.v;
+        });
+        const it = $('lg-int');
+        if (it) it.querySelectorAll('button').forEach(b => b.onclick = () => {
+            it.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+            b.classList.add('on'); LG.intensity = +b.dataset.v;
+        });
+    }
+    window.trkSaveLog = async () => {
+        const t = TRK.find(x => x.id === logId); if (!t) return;
+        const g = id => { const e = $(id); return e ? e.value.trim() : ''; };
+        const entry = { at: Date.now(), intensity: LG.intensity || 3 };
+        if (LG.klass) entry.klass = LG.klass;
+        if (g('lg-note')) entry.note = g('lg-note');
+        if (g('lg-amt')) entry.amt = g('lg-amt');
+        if (g('lg-sup')) entry.sup = g('lg-sup');
+        if (g('lg-food')) entry.food = g('lg-food');
+        if (g('lg-min')) entry.mins = +g('lg-min');
+        if (g('lg-kcal')) entry.kcal = +g('lg-kcal');
+        const kg = parseFloat(g('lg-kg'));
+        if (kg) {
+            entry.kg = kg;
+            const w = (BODY.w || []).filter(x => x.d !== LG.date);
+            w.push({ d: LG.date, kg: kg });
+            w.sort((a, b) => a.d.localeCompare(b.d));
+            await save('_body', { h: BODY.h || 0, w: w.slice(-400) });
+        }
+        const logs = Object.assign({}, t.logs || {});
+        logs[LG.date] = entry;
+        await save(t.id, { logs: logs });
+        trkCloseSheet('trk-log');
+        const K = KIND[t.kind];
+        showToast(t.kind === 'bad' ? 'Logged honestly — tomorrow is a clean slate.' : 'Logged · ' + (streak(Object.assign({}, t, { logs: logs })) ) + ' day streak');
+        try { if (navigator.vibrate) navigator.vibrate(t.kind === 'bad' ? [20, 60, 20] : 16); } catch (e) {}
+    };
+    window.trkDelLog = async (k) => {
+        const t = TRK.find(x => x.id === logId); if (!t) return;
+        const logs = Object.assign({}, t.logs || {});
+        delete logs[k];
+        await save(t.id, { logs: logs });
+        trkCloseSheet('trk-log');
+        showToast('Entry removed.');
+    };
+
+    /* ============ CREATE / EDIT ============ */
+    let ED = {};
+    window.trkNew = () => { ED = { kind: 'good', color: KIND.good.c, target: 7 }; editSheet(null); };
+    window.trkEdit = (id) => {
+        const t = TRK.find(x => x.id === id); if (!t) return;
+        ED = { kind: t.kind, color: t.color || KIND[t.kind].c, target: t.target || 7, name: t.name, unit: t.unit || '' };
+        editSheet(id);
+    };
+    function editSheet(id) {
+        const COLORS = ['#4ade80', '#38bdf8', '#a78bfa', '#f472b6', '#fbbf24', '#fb923c', '#ff5f57', '#22d3ee'];
+        $('trk-edit-box').innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span style="font-size:13px;font-weight:900;color:#fff">${id ? 'Edit tracker' : 'New tracker'}</span>
+          <button class="trk-x" onclick="trkCloseSheet('trk-edit')">×</button>
+        </div>
+        <span class="trk-l">Type</span>
+        <div class="trk-pick" id="ed-kind">${Object.keys(KIND).map(k =>
+            `<button class="trk-p ${ED.kind === k ? 'on' : ''}" data-v="${k}">
+              <span style="display:inline-flex;align-items:center;gap:5px"><svg style="width:12px;height:12px" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${KIND[k].i}</svg>${KIND[k].n}</span></button>`).join('')}</div>
+        <div id="ed-hint" style="font-size:9.5px;color:#5a6472;margin-top:6px"></div>
+        <span class="trk-l">Name</span>
+        <input class="trk-i" id="ed-name" placeholder="Morning run · No doom-scrolling · Water the tulsi" value="${escapeHtml(ED.name || '')}">
+        <span class="trk-l">Measure (optional)</span>
+        <input class="trk-i" id="ed-unit" placeholder="minutes · pages · km · cigarettes" value="${escapeHtml(ED.unit || '')}">
+        <span class="trk-l">Weekly target</span>
+        <div class="trk-pick" id="ed-tgt">${[1,2,3,4,5,6,7].map(n => `<button class="trk-p ${ED.target === n ? 'on' : ''}" data-v="${n}">${n}×</button>`).join('')}</div>
+        <span class="trk-l">Colour</span>
+        <div class="trk-pick" id="ed-col">${COLORS.map(c =>
+            `<button class="trk-p" data-v="${c}" style="width:30px;height:30px;padding:0;background:${c};border-color:${ED.color === c ? '#fff' : 'transparent'};border-width:2px"></button>`).join('')}</div>
+        <button class="trk-cta" onclick="trkSaveTracker('${id || ''}')">${id ? 'Save changes' : 'Create tracker'}</button>
+        ${id ? `<button class="trk-ghost" style="color:#ff5f57" onclick="trkDelete('${id}')">Delete this tracker</button>` : ''}`;
+        $('trk-edit').classList.add('open');
+        const hint = () => {
+            $('ed-hint').innerHTML = {
+                good: 'Marked on your calendar every day you <b>do</b> it. Streak grows with consistency.',
+                bad:  'Inverted — a <b>clean</b> day (no entry) is the win. Logging a slip keeps you honest.',
+                gym:  'Logs your session type, intensity, supplements, food, calories and body weight.',
+                pet:  'Track feeding, watering, walks and care for a pet or plant.'
+            }[ED.kind];
+        };
+        hint();
+        $('ed-kind').querySelectorAll('.trk-p').forEach(b => b.onclick = () => {
+            $('ed-kind').querySelectorAll('.trk-p').forEach(x => x.classList.remove('on'));
+            b.classList.add('on'); ED.kind = b.dataset.v; ED.color = KIND[ED.kind].c; hint();
+            $('ed-col').querySelectorAll('.trk-p').forEach(x => x.style.borderColor = x.dataset.v === ED.color ? '#fff' : 'transparent');
+        });
+        $('ed-tgt').querySelectorAll('.trk-p').forEach(b => b.onclick = () => {
+            $('ed-tgt').querySelectorAll('.trk-p').forEach(x => x.classList.remove('on'));
+            b.classList.add('on'); ED.target = +b.dataset.v;
+        });
+        $('ed-col').querySelectorAll('.trk-p').forEach(b => b.onclick = () => {
+            ED.color = b.dataset.v;
+            $('ed-col').querySelectorAll('.trk-p').forEach(x => x.style.borderColor = x.dataset.v === ED.color ? '#fff' : 'transparent');
+        });
+        setTimeout(() => { try { $('ed-name').focus({ preventScroll: true }); zdArmProtect($('ed-name')); } catch (e) {} }, 110);
+    }
+    window.trkSaveTracker = async (id) => {
+        const name = $('ed-name').value.trim();
+        if (!name) { showToast('Give it a name first.'); return; }
+        const patch = { name: name, kind: ED.kind, color: ED.color, target: ED.target, unit: $('ed-unit').value.trim() };
+        if (id) { await save(id, patch); showToast('Tracker updated.'); }
+        else {
+            patch.logs = {}; patch.order = TRK.length; patch.createdAt = Date.now();
+            try { await col().add(patch); showToast('Tracker created — first entry starts the streak.'); }
+            catch (e) { showToast('Could not create it.'); return; }
+        }
+        trkCloseSheet('trk-edit');
+    };
+    window.trkDelete = async (id) => {
+        const t = TRK.find(x => x.id === id); if (!t) return;
+        const ok = await zdConfirm('“' + (t.name || 'This tracker') + '” and all its history will be removed.', { title: 'Delete tracker?', okText: 'Delete', danger: true });
+        if (!ok) return;
+        try { await col().doc(id).delete(); trkCloseSheet('trk-edit'); showToast('Tracker deleted.'); }
+        catch (e) { showToast('Could not delete it.'); }
+    };
+
+    /* ============ DETAIL + CALENDAR ============ */
+    window.trkDetail = (id) => {
+        const t = TRK.find(x => x.id === id); if (!t) return;
+        logId = id; calM = new Date();
+        drawDetail();
+        $('trk-detail').classList.add('open');
+    };
+    window.trkCalNav = (n) => { calM.setMonth(calM.getMonth() + n); drawDetail(); };
+    function drawDetail() {
+        const t = TRK.find(x => x.id === logId); if (!t) return;
+        const K = KIND[t.kind], c = t.color || K.c;
+        const y = calM.getFullYear(), m = calM.getMonth();
+        const first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+        const t2 = TODAY();
+        let cells = '';
+        for (let i = 0; i < first; i++) cells += '<div class="cd void"></div>';
+        for (let d = 1; d <= days; d++) {
+            const k = key(new Date(y, m, d));
+            const hit = !!(t.logs && t.logs[k]);
+            const future = k > t2;
+            let cls = '';
+            if (t.kind === 'bad') cls = hit ? 'bad' : (future ? 'future' : 'clean');
+            else cls = hit ? 'hit' : (future ? 'future' : '');
+            cells += `<div class="cd ${cls}${k === t2 ? ' today' : ''}" onclick="trkLog('${t.id}','${k}')" title="${k}">${d}</div>`;
+        }
+        const monthN = monthDone(t, y, m);
+        const hist = Object.keys(t.logs || {}).sort().reverse().slice(0, 6);
+        $('trk-detail-box').innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <span class="flex items-center gap-2 min-w-0">
+            <span class="tc-ico" style="--tc-c:${c};width:28px;height:28px;border-radius:9px"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${K.i}</svg></span>
+            <span class="min-w-0"><span class="block truncate" style="font-size:13px;font-weight:900;color:#fff">${escapeHtml(t.name)}</span>
+            <span class="tc-s">${K.n} · ${streak(t)} day streak</span></span>
+          </span>
+          <button class="trk-x" onclick="trkCloseSheet('trk-detail')">×</button>
+        </div>
+        <div class="flex items-center justify-between mb-2.5" style="padding:6px 2px">
+          <button class="trk-p" onclick="trkCalNav(-1)">‹</button>
+          <span style="font-size:11.5px;font-weight:900;color:#fff">${calM.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</span>
+          <button class="trk-p" onclick="trkCalNav(1)">›</button>
+        </div>
+        <div class="trk-dow">${['S','M','T','W','T','F','S'].map(d=>'<span>'+d+'</span>').join('')}</div>
+        <div class="trk-cal" style="--tc-c:${c}">${cells}</div>
+        <div style="font-size:9.5px;color:#5a6472;margin-top:9px;line-height:1.5">
+          ${t.kind === 'bad'
+            ? '<span style="color:#4ade80">\u25a0</span> clean day &nbsp; <span style="color:#ff5f57">\u25a0</span> slip logged — <b>fewer red squares is the goal</b>'
+            : '<span style="color:'+c+'">\u25a0</span> completed &nbsp; <span style="opacity:.4">\u25a0</span> missed — tap any day to log it retroactively'}
+          <br>${monthN} ${t.kind==='bad'?'slip':'entr'}${t.kind==='bad'?(monthN===1?'':'s'):(monthN===1?'y':'ies')} this month
+        </div>
+        ${hist.length ? '<span class="trk-l">Recent entries</span>' + hist.map(k => {
+            const e = t.logs[k];
+            const bits = [e.klass, e.intensity ? 'intensity ' + e.intensity : '', e.mins ? e.mins + ' min' : '',
+                          e.kcal ? e.kcal + ' kcal' : '', e.kg ? e.kg + ' kg' : '', e.amt, e.sup, e.note].filter(Boolean);
+            return `<div style="padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.045);margin-bottom:5px">
+                <div style="font-size:10px;font-weight:800;color:${t.kind==='bad'?'#ff5f57':c}">${new Date(k+'T12:00').toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}</div>
+                <div style="font-size:11px;color:#c3cad6;margin-top:2px;line-height:1.5">${escapeHtml(bits.join(' · ')) || '—'}</div></div>`;
+        }).join('') : ''}
+        <button class="trk-cta" onclick="trkLog('${t.id}','${t2}')">Log today</button>`;
+    }
+
+    /* ============ BODY METRICS ============ */
+    window.trkBody = () => {
+        const last = BODY.w.length ? BODY.w[BODY.w.length - 1].kg : '';
+        $('trk-log-box').innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span style="font-size:13px;font-weight:900;color:#fff;display:flex;align-items:center;gap:7px">
+            <svg style="width:15px;height:15px;color:rgb(var(--accent-rgb))" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${I.scale}</svg>Body metrics</span>
+          <button class="trk-x" onclick="trkCloseSheet('trk-log')">×</button>
+        </div>
+        <div style="font-size:10px;color:#7d8695">Used for your BMI gauge. Stored in your account only.</div>
+        <span class="trk-l">Height (cm)</span><input class="trk-i" id="bd-h" type="number" inputmode="numeric" placeholder="175" value="${BODY.h || ''}">
+        <span class="trk-l">Weight today (kg)</span><input class="trk-i" id="bd-w" type="number" step="0.1" inputmode="decimal" placeholder="72.5" value="${last}">
+        <button class="trk-cta" onclick="trkSaveBody()">Save</button>`;
+        $('trk-log').classList.add('open');
+        setTimeout(() => { try { $('bd-h').focus({ preventScroll: true }); zdArmProtect($('bd-h')); } catch (e) {} }, 110);
+    };
+    window.trkSaveBody = async () => {
+        const h = parseFloat($('bd-h').value), kg = parseFloat($('bd-w').value);
+        if (!h || !kg) { showToast('Enter both height and weight.'); return; }
+        const w = (BODY.w || []).filter(x => x.d !== TODAY());
+        w.push({ d: TODAY(), kg: kg });
+        w.sort((a, b) => a.d.localeCompare(b.d));
+        await save('_body', { h: h, w: w.slice(-400) });
+        trkCloseSheet('trk-log');
+        showToast('Body metrics updated.');
+    };
+
+    /* ============ TOUR ============ */
+    const TSTEPS = [
+        ['Welcome to the Grid', 'Every habit, workout and bit of care you track lives here. The Grid keeps score so you don\u2019t have to remember.', I.grid],
+        ['Four kinds of tracker', '<b>Good habit</b> — marked each day you do it.<br><b>Break a habit</b> — inverted: a clean day is the win, and red squares are what you\u2019re reducing.<br><b>Workout</b> — session type, intensity, supplements, food, calories and body weight.<br><b>Pet &amp; garden</b> — feeding, watering, walks and care.', I.good],
+        ['One tap a day', 'Each card has a big button — that\u2019s the whole ritual. The seven squares show your last week at a glance, and the flame counts your streak.', I.gym],
+        ['Your calendar, per tracker', 'Tap the grid icon on any card for a full month view. Missed a day? Tap that square and log it retroactively — nothing is ever locked.', I.cal],
+        ['Body &amp; progress', 'Add your height and weight for a live BMI gauge, and watch the year bar fill. It shows exactly how many days you have left to use.', I.scale],
+        ['You\u2019re in', 'Press <b>Alt + T</b> from anywhere to jump straight back into the Grid. Now go make the first entry.', I.good]
+    ];
+    let tstep = 0;
+    window.trkTour = () => { tstep = 0; drawTour(); $('trk-tourwrap').classList.add('open'); };
+    function drawTour() {
+        const [t, b, ic] = TSTEPS[tstep];
+        $('trk-tour-box').innerHTML = `
+        <div style="width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background-image:var(--zd-grad);color:#fff;margin-bottom:12px">
+          <svg style="width:19px;height:19px" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${ic}</svg></div>
+        <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:6px">${t}</div>
+        <div style="font-size:12px;color:#a8b0bd;line-height:1.65">${b}</div>
+        <div class="flex items-center justify-between" style="margin-top:18px">
+          <span style="display:flex;gap:4px">${TSTEPS.map((_, i) =>
+            `<i style="display:block;width:${i===tstep?16:5}px;height:5px;border-radius:99px;${i===tstep?'background-image:var(--zd-grad)':'background:rgba(255,255,255,.18)'};transition:all .3s"></i>`).join('')}</span>
+          <span style="display:flex;gap:6px">
+            ${tstep ? '<button class="trk-p" onclick="trkTourNav(-1)">Back</button>' : ''}
+            <button class="trk-p" onclick="trkTourEnd()">Skip</button>
+            <button class="trk-p on" onclick="trkTourNav(1)">${tstep === TSTEPS.length - 1 ? 'Start' : 'Next'}</button>
+          </span></div>`;
+    }
+    window.trkTourNav = (n) => { tstep += n; tstep >= TSTEPS.length ? trkTourEnd() : drawTour(); };
+    window.trkTourEnd = () => { $('trk-tourwrap').classList.remove('open'); localStorage.setItem('zdTrkTour', '1'); };
+
+    /* ============ PLUMBING ============ */
+    window.trkCloseSheet = (id) => $(id).classList.remove('open');
+    ['trk-edit', 'trk-log', 'trk-detail', 'trk-tourwrap'].forEach(id => {
+        $(id).addEventListener('click', e => { if (e.target.id === id) $(id).classList.remove('open'); });
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            for (const id of ['trk-tourwrap', 'trk-log', 'trk-detail', 'trk-edit']) {
+                if ($(id).classList.contains('open')) {
+                    e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                    $(id).classList.remove('open'); return;
+                }
+            }
+            if ($('trk-modal').classList.contains('open')) {
+                e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                closeTrackers(); return;
+            }
+        }
+        /* ⚙ SHORTCUT: Alt+T */
+        if (e.altKey && !e.ctrlKey && !e.metaKey && ((e.key || '').toLowerCase() === 't' || e.code === 'KeyT')) {
+            e.preventDefault();
+            $('trk-modal').classList.contains('open') ? closeTrackers() : openTrackers();
+        }
+    }, true);
+    /* expose for V8.1 / V8.2 */
+    window.zdTrk = { get list() { return TRK; }, get body() { return BODY; }, streak: streak, key: key, KIND: KIND, save: save, render: render };
+
+    try {
+        zdMenuInject2('trk', 'openTrackers', 'Trackers · The Grid', I.grid);
+        ZD_FEATURES.push({ id: 'trk', label: 'Trackers (habits, gym, pets)', fns: ['openTrackers'] });
+        ZD_FEAT_ICONS.trk = I.grid;
+    } catch (e) {}
+    setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 700);
 })();    
 
 
