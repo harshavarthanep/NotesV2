@@ -5619,7 +5619,7 @@
             //     }
             //     try { it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {}
             // };
-            b.onclick = () => { zdScrollToNode(line.domNode); };
+            b.onclick = () => { zdScrollToNode(it.node); };
             el.appendChild(b);
         });
         updateOutlineActive();
