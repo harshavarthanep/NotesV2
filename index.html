@@ -13190,8 +13190,10 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       body.zd-unsealing #paper-container::after{opacity:0;}
       /* ⚙ END ACCENT TINT */
 
-      body.zd-read #toolbar{opacity:.45;pointer-events:none;filter:grayscale(.45);
-          transition:opacity ${ZD_ANIM_MS}ms ease,filter ${ZD_ANIM_MS}ms ease;}
+      body.zd-read #doc-title{filter:blur(1.1px) saturate(.97);opacity:.92;pointer-events:none;
+          transition:filter ${ZD_ANIM_MS}ms cubic-bezier(.22,1,.36,1),opacity ${ZD_ANIM_MS}ms ease;}
+      body.zd-read #save-status,body.zd-read #word-count{opacity:.5;
+          transition:opacity ${ZD_ANIM_MS}ms ease;}
 
       /* ---------- sweep of light on unlock ---------- */
       #zd-sweep{position:absolute;left:0;right:0;top:0;height:150px;z-index:9;display:none;pointer-events:none;
@@ -13598,6 +13600,944 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         scroll.appendChild(sec);
     }, 1400);
 })();   
+
+    // New Code
+
+    /* ============================================================
+   V7.1 — CONNECTIONS: automatic linking + automatic tags
+   Replaces the Linked/Unlinked mentions panel. Detects every note
+   whose title appears in the open note and links them in one tap
+   (or automatically, if you switch that on). Suggests tags from
+   term frequency + co-occurrence across your vault.
+============================================================ */
+(function zd71() {
+    if (window.__zd71) return; window.__zd71 = true;
+
+    /* ⚙ AUTO-LINK defaults OFF: silently rewriting note text is risky, so
+       the toggle inside the panel opts you in. Change to true to default on. */
+    const AUTO_DEFAULT = false;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    #conn-modal{z-index:128;}
+    .cn-row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;
+        border-radius:10px;border:1px solid var(--border-color);background:var(--bg-color);
+        margin-bottom:6px;transition:border-color .15s ease,transform .15s ease;}
+    .cn-row:hover{border-color:rgb(var(--accent-rgb) / .55);transform:translateX(2px);}
+    .cn-ctx{font-size:9.5px;color:#9ca3af;line-height:1.45;}
+    .cn-ctx mark{background:rgb(var(--accent-rgb) / .2);color:rgb(var(--accent-rgb));
+        border-radius:3px;padding:0 2px;font-weight:700;}
+    .cn-go{flex-shrink:0;padding:5px 11px;border-radius:8px;font-size:10px;font-weight:800;
+        color:#fff;background-image:var(--zd-grad);}
+    .cn-go:active{transform:scale(.95);}
+    .cn-tag{padding:5px 11px;border-radius:99px;font-size:11px;font-weight:700;
+        background:rgb(var(--accent-rgb) / .11);color:rgb(var(--accent-rgb));
+        border:1px solid rgb(var(--accent-rgb) / .22);transition:all .15s ease;}
+    .cn-tag:hover{background:rgb(var(--accent-rgb) / .2);}
+    .cn-tag.used{opacity:.35;pointer-events:none;}
+    .cn-hd{font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+        color:#9ca3af;display:flex;align-items:center;gap:7px;margin:14px 0 8px;}
+    .cn-hd::after{content:'';flex:1;height:1px;background:var(--border-color);opacity:.7;}
+    .cn-hd:first-child{margin-top:0;}
+    .cn-sw{width:36px;height:20px;border-radius:99px;background:rgba(127,127,127,.34);
+        position:relative;flex-shrink:0;transition:background .2s ease;}
+    .cn-sw.on{background-image:var(--zd-grad);}
+    .cn-sw i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:99px;
+        background:#fff;transition:transform .2s ease;box-shadow:0 1px 3px rgba(0,0,0,.35);}
+    .cn-sw.on i{transform:translateX(16px);}
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="conn-modal" class="zd-cmodal"><div class="zd-cmodal-box max-w-md flex flex-col" style="max-height:84vh">
+      <div class="flex items-center justify-between mb-1 flex-shrink-0">
+        <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7l1.5-1.5M10.2 13.8a4 4 0 010-5.7l3-3a4 4 0 115.6 5.7l-1.5 1.5"/></svg> Connections</h3>
+        <button onclick="closeConnections()" class="zdvh-x">×</button>
+      </div>
+      <div id="cn-note" class="text-[10.5px] text-muted truncate mb-3 flex-shrink-0"></div>
+      <div id="cn-body" class="flex-1 min-h-0 overflow-y-auto zd-scroll pr-1"></div>
+      <div class="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-border flex-shrink-0">
+        <span class="text-[10.5px] text-text leading-snug">Link &amp; tag automatically<br><span class="text-[9px] text-muted">Applies on save, in every note</span></span>
+        <button id="cn-auto" class="cn-sw"><i></i></button>
+      </div>
+    </div></div>`);
+
+    const $ = id => document.getElementById(id);
+    const autoOn = () => (localStorage.getItem('zdAutoLink') ?? (AUTO_DEFAULT ? '1' : '0')) === '1';
+    const STOP = new Set('the a an and or but if of to in on for with at by from as is are was were be been it its this that these those i you he she we they not no do does did can could will would should may might must have has had about into over under again more most some such only own same so than too very just also there here when where why how what which who while during before after above below up down out off all any both each few other new note notes untitled document'.split(' '));
+
+    /* ---------- candidate links: other note titles appearing in this note ---------- */
+    function findLinks(doc) {
+        const text = docPlainText(doc);
+        const low = text.toLowerCase();
+        const out = [];
+        state.docs.forEach(d => {
+            if (d.id === doc.id) return;
+            const t = (d.title || '').trim();
+            if (t.length < 4) return;                       /* too short = false positives */
+            if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return;      /* skip daily-note titles */
+            if (d.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(d.id))) return;
+            const tl = t.toLowerCase();
+            const at = low.indexOf(tl);
+            if (at < 0) return;
+            /* already wrapped as [[Title]]? then it's connected, skip */
+            if (new RegExp('\\[\\[\\s*' + escapeRegExp(t) + '\\s*\\]\\]', 'i').test(text)) return;
+            /* must be a whole-word match */
+            const before = at > 0 ? low[at - 1] : ' ';
+            const after = low[at + tl.length] || ' ';
+            if (/[a-z0-9]/.test(before) || /[a-z0-9]/.test(after)) return;
+            const s = Math.max(0, at - 34);
+            const ctx = (s > 0 ? '…' : '') + text.slice(s, at) +
+                        '\u0001' + text.slice(at, at + t.length) + '\u0002' +
+                        text.slice(at + t.length, at + t.length + 42).replace(/\n/g, ' ') + '…';
+            out.push({ doc: d, title: t, index: at, ctx: ctx });
+        });
+        return out.sort((a, b) => a.index - b.index).slice(0, 25);
+    }
+
+    /* ---------- tag suggestions: frequency + co-occurrence with your vault ---------- */
+    function findTags(doc) {
+        const text = docPlainText(doc);
+        const words = (text.toLowerCase().match(/[a-z][a-z0-9'-]{3,}/g) || []).filter(w => !STOP.has(w));
+        if (words.length < 12) return [];
+        const tf = {};
+        words.forEach(w => tf[w] = (tf[w] || 0) + 1);
+        /* how many other notes use each word — a word used in a few notes makes a better tag
+           than one used in every note or only here */
+        const df = {};
+        Object.keys(tf).forEach(w => {
+            let n = 0;
+            state.docs.forEach(d => { if (d.id !== doc.id && docPlainText(d).toLowerCase().indexOf(w) >= 0) n++; });
+            df[w] = n;
+        });
+        const have = docTags(doc);
+        const existing = new Set();
+        state.docs.forEach(d => docTags(d).forEach(t => existing.add(t)));
+        return Object.keys(tf)
+            .filter(w => tf[w] >= 2 && have.indexOf(w) < 0)
+            .map(w => ({ w: w, s: tf[w] * (existing.has(w) ? 2.4 : 1) * (1 + Math.min(df[w], 6) * 0.28) }))
+            .sort((a, b) => b.s - a.s).slice(0, 7).map(x => x.w);
+    }
+
+    /* ---------- apply ---------- */
+    function linkOne(title) {
+        const text = quill.getText();
+        const at = text.toLowerCase().indexOf(title.toLowerCase());
+        if (at < 0) { showToast('That mention is no longer in this note.'); return false; }
+        quill.insertText(at + title.length, ']]', 'user');
+        quill.insertText(at, '[[', 'user');
+        return true;
+    }
+    window.cnLinkOne = (title) => {
+        if (linkOne(title)) {
+            try { scanInlineTokens(true); } catch (e) {}
+            showToast('Linked to “' + title + '”.');
+            setTimeout(renderConn, 260);
+        }
+    };
+    window.cnLinkAll = () => {
+        const doc = state.docs.find(d => d.id === state.docId); if (!doc) return;
+        const hits = findLinks(doc);
+        if (!hits.length) return;
+        /* apply from the END backwards so earlier indexes stay valid */
+        let n = 0;
+        hits.slice().sort((a, b) => b.index - a.index).forEach(h => { if (linkOne(h.title)) n++; });
+        try { scanInlineTokens(true); } catch (e) {}
+        showToast('Connected ' + n + ' note' + (n === 1 ? '' : 's') + '.');
+        setTimeout(renderConn, 300);
+    };
+    window.cnAddTag = (t) => {
+        const len = quill.getLength();
+        const tail = quill.getText(Math.max(0, len - 2), 2);
+        quill.insertText(len - 1, (tail.indexOf('\n') >= 0 ? '' : '\n') + '#' + t + ' ', 'user');
+        try { scanInlineTokens(true); } catch (e) {}
+        showToast('#' + t + ' added.');
+        setTimeout(renderConn, 240);
+    };
+
+    /* ---------- panel ---------- */
+    window.openConnections = () => {
+        if (state.isGuest || !state.docId) { showToast('Open a note first.'); return; }
+        $('conn-modal').classList.add('open');
+        renderConn();
+    };
+    window.closeConnections = () => $('conn-modal').classList.remove('open');
+    function renderConn() {
+        const doc = state.docs.find(d => d.id === state.docId); if (!doc) return;
+        $('cn-note').textContent = 'For “' + (doc.title || 'Untitled') + '”';
+        $('cn-auto').classList.toggle('on', autoOn());
+        const body = $('cn-body');
+        const links = findLinks(doc);
+        const tags = findTags(doc);
+        const title = (doc.title || '').trim();
+        const back = title ? state.docs.filter(d => d.id !== doc.id &&
+            new RegExp('\\[\\[\\s*' + escapeRegExp(title) + '\\s*\\]\\]', 'i').test(docPlainText(d))) : [];
+
+        let h = '';
+        h += '<div class="cn-hd">Ready to connect' + (links.length ? ' <span style="color:rgb(var(--accent-rgb));font-size:9px">' + links.length + '</span>' : '') + '</div>';
+        if (!links.length) {
+            h += '<div class="text-center text-muted text-[11px] py-4 leading-relaxed">Nothing new to connect.<br>Mention another note’s title and it appears here.</div>';
+        } else {
+            h += '<button onclick="cnLinkAll()" class="w-full py-2.5 mb-2.5 text-[11.5px] font-bold rounded-xl text-white active:scale-[.98] transition" style="background-image:var(--zd-grad)">Connect all ' + links.length + ' automatically</button>';
+            links.forEach(l => {
+                const ctx = escapeHtml(l.ctx).replace('\u0001', '<mark>').replace('\u0002', '</mark>');
+                h += '<div class="cn-row"><span class="min-w-0 flex-1">' +
+                     '<span class="block text-xs font-semibold text-text truncate">' + escapeHtml(l.title) + '</span>' +
+                     '<span class="cn-ctx block truncate">' + ctx + '</span></span>' +
+                     '<button class="cn-go" onclick="cnLinkOne(' + JSON.stringify(l.title).replace(/"/g, '&quot;') + ')">Link</button></div>';
+            });
+        }
+
+        h += '<div class="cn-hd">Suggested tags</div>';
+        h += tags.length
+            ? '<div class="flex flex-wrap gap-1.5">' + tags.map(t =>
+                '<button class="cn-tag" onclick="cnAddTag(\'' + t + '\')">+ #' + escapeHtml(t) + '</button>').join('') + '</div>'
+            : '<div class="text-muted text-[11px] py-2">Write a little more — tags are drawn from repeated terms.</div>';
+
+        h += '<div class="cn-hd">Notes linking here' + (back.length ? ' <span style="color:rgb(var(--accent-rgb));font-size:9px">' + back.length + '</span>' : '') + '</div>';
+        h += back.length
+            ? back.map(d => '<button class="cn-row" onclick="closeConnections();openDoc(\'' + d.id + '\',state.docs.find(x=>x.id===\'' + d.id + '\'))">' +
+                '<span class="text-accent flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7"/></svg></span>' +
+                '<span class="text-xs font-medium text-text truncate flex-1">' + escapeHtml(d.title || 'Untitled') + '</span></button>').join('')
+            : '<div class="text-muted text-[11px] py-2">Nothing links here yet — it will appear the moment another note mentions this title.</div>';
+
+        body.innerHTML = h;
+    }
+    $('cn-auto').onclick = () => {
+        const next = !autoOn();
+        localStorage.setItem('zdAutoLink', next ? '1' : '0');
+        $('cn-auto').classList.toggle('on', next);
+        showToast(next ? 'Auto-connect on — links and tags apply as you save.' : 'Auto-connect off.');
+    };
+    $('conn-modal').addEventListener('click', e => { if (e.target.id === 'conn-modal') closeConnections(); });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && $('conn-modal').classList.contains('open')) {
+            e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            closeConnections();
+        }
+    }, true);
+
+    /* ---------- automatic mode: applied quietly after each save ---------- */
+    let autoBusy = false;
+    const _sd = window.saveToDb;
+    window.saveToDb = async function () {
+        const r = await _sd.apply(this, arguments);
+        if (!autoOn() || autoBusy || state.isGuest || !state.docId) return r;
+        if (document.body.classList.contains('zd-read') || document.body.classList.contains('zd-locked')) return r;
+        autoBusy = true;
+        setTimeout(() => {
+            try {
+                const doc = state.docs.find(d => d.id === state.docId);
+                if (doc) {
+                    const hits = findLinks(doc);
+                    if (hits.length) {
+                        let n = 0;
+                        hits.slice().sort((a, b) => b.index - a.index).forEach(h => { if (linkOne(h.title)) n++; });
+                        if (n) { scanInlineTokens(true); showToast('Auto-connected ' + n + ' note' + (n === 1 ? '' : 's') + '.'); }
+                    }
+                }
+            } catch (e) {}
+            autoBusy = false;
+        }, 700);
+        return r;
+    };
+
+    /* ---------- retire the old mentions entry ---------- */
+    document.querySelectorAll('[data-zdfn="mentions"]').forEach(el => el.remove());
+    const mm = $('ment-modal'); if (mm) mm.remove();
+    try { const i = ZD_FEATURES.findIndex(f => f.id === 'mentions'); if (i >= 0) ZD_FEATURES.splice(i, 1); } catch (e) {}
+    document.querySelectorAll('#comments-panel .zd-mentions-old').forEach(el => el.remove());
+
+    try {
+        zdMenuInject2('conn', 'openConnections', 'Connections', '<path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7l1.5-1.5M10.2 13.8a4 4 0 010-5.7l3-3a4 4 0 115.6 5.7l-1.5 1.5"/>');
+        ZD_FEATURES.push({ id: 'conn', label: 'Connections (auto-link & tags)', fns: ['openConnections'] });
+        ZD_FEAT_ICONS.conn = '<path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7l1.5-1.5M10.2 13.8a4 4 0 010-5.7l3-3a4 4 0 115.6 5.7l-1.5 1.5"/>';
+    } catch (e) {}
+    setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 600);
+})();
+
+    // New Code
+
+    /* ============================================================
+   V7.2 — ASK YOUR NOTES
+   Natural-language retrieval over your vault. BM25-style ranking
+   with phrase boosting and passage extraction — it finds and shows
+   the exact lines that answer you, with the source note. Entirely
+   local: no cloud, no API key, no cost, works offline.
+============================================================ */
+(function zd72() {
+    if (window.__zd72) return; window.__zd72 = true;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    #ask-modal{z-index:129;}
+    #ask-in{width:100%;background:var(--bg-color);border:1.5px solid var(--border-color);
+        border-radius:13px;padding:11px 13px;font-size:14px;color:var(--text-color);outline:none;
+        caret-color:rgb(var(--accent-rgb));transition:border-color .16s ease;}
+    #ask-in:focus{border-color:rgb(var(--accent-rgb));}
+    @media (max-width:850px){#ask-in{font-size:16px;}}
+    .ak-ex{padding:6px 11px;border-radius:99px;font-size:10.5px;font-weight:600;
+        background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color);
+        transition:all .15s ease;text-align:left;}
+    .ak-ex:hover{border-color:rgb(var(--accent-rgb));color:rgb(var(--accent-rgb));}
+    .ak-hit{border:1px solid var(--border-color);border-left:3px solid rgb(var(--accent-rgb));
+        border-radius:11px;background:var(--bg-color);padding:11px 12px;margin-bottom:8px;
+        animation:akIn .3s cubic-bezier(.22,1,.36,1) both;}
+    @keyframes akIn{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:none}}
+    .ak-hit:hover{border-color:rgb(var(--accent-rgb) / .6);}
+    .ak-pass{font-size:12px;line-height:1.6;color:var(--text-color);}
+    .ak-pass mark{background:rgb(var(--accent-rgb) / .22);color:rgb(var(--accent-rgb));
+        border-radius:3px;padding:0 2.5px;font-weight:700;}
+    .ak-src{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:7px;
+        border-top:1px solid var(--border-color);font-size:9.5px;color:#9ca3af;}
+    .ak-open{margin-left:auto;font-size:9.5px;font-weight:800;color:rgb(var(--accent-rgb));}
+    .ak-score{font-size:8px;font-weight:800;padding:1px 6px;border-radius:99px;
+        background:rgb(var(--accent-rgb) / .13);color:rgb(var(--accent-rgb));}
+    #ask-thinking{display:none;align-items:center;gap:8px;padding:14px 0;font-size:11.5px;color:#9ca3af;}
+    #ask-thinking.on{display:flex;}
+    .ak-dot{width:5px;height:5px;border-radius:99px;background:rgb(var(--accent-rgb));
+        animation:akPulse 1.2s ease-in-out infinite;}
+    .ak-dot:nth-child(2){animation-delay:.15s}.ak-dot:nth-child(3){animation-delay:.3s}
+    @keyframes akPulse{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="ask-modal" class="zd-cmodal"><div class="zd-cmodal-box max-w-lg flex flex-col" style="max-height:86vh">
+      <div class="flex items-center justify-between mb-3 flex-shrink-0">
+        <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.35-4.35M11 8v.01M11 11v3"/></svg> Ask your notes</h3>
+        <button onclick="closeAsk()" class="zdvh-x">×</button>
+      </div>
+      <input id="ask-in" placeholder="Where did I save the AWS deployment command?" autocomplete="off" spellcheck="false" class="flex-shrink-0">
+      <div id="ask-thinking"><span class="ak-dot"></span><span class="ak-dot"></span><span class="ak-dot"></span><span>Searching your notes…</span></div>
+      <div id="ask-out" class="flex-1 min-h-0 overflow-y-auto zd-scroll pr-1 mt-3"></div>
+      <div class="text-[9px] text-muted mt-2 pt-2 border-t border-border flex-shrink-0 leading-snug">Searches every note on this device — nothing is sent anywhere.</div>
+    </div></div>`);
+
+    const $ = id => document.getElementById(id);
+    const QSTOP = new Set('what where when who why how which show find tell give list all every did do does is are was were the a an of to in on for with at by from my me i and or that this it about any some can could would should'.split(' '));
+    const tok = s => (String(s).toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g) || []);
+
+    window.openAsk = () => {
+        if (state.isGuest) { showToast('Sign in first.'); return; }
+        $('ask-modal').classList.add('open');
+        $('ask-in').value = '';
+        renderExamples();
+        setTimeout(() => { try { $('ask-in').focus({ preventScroll: true }); zdArmProtect($('ask-in')); } catch (e) {} }, 90);
+    };
+    window.closeAsk = () => $('ask-modal').classList.remove('open');
+    function renderExamples() {
+        $('ask-out').innerHTML =
+            '<div class="text-[9px] font-bold uppercase tracking-widest text-muted mb-2">Try asking</div>' +
+            '<div class="flex flex-col gap-1.5">' +
+            ['Where did I save the AWS deployment command?',
+             'Show every meeting where pricing was discussed',
+             'What did I learn about React performance?',
+             'What are my open action items?',
+             'Notes about the launch plan'].map(q =>
+                '<button class="ak-ex" onclick="askRun(' + JSON.stringify(q).replace(/"/g, '&quot;') + ')">' + escapeHtml(q) + '</button>').join('') +
+            '</div>';
+    }
+
+    /* ---------- the engine ---------- */
+    function search(q) {
+        const terms = tok(q).filter(w => w.length > 1 && !QSTOP.has(w));
+        if (!terms.length) return [];
+        const phrase = q.toLowerCase().replace(/[?.!,]/g, '').trim();
+        const pool = state.docs.filter(d => !(d.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(d.id))));
+        const N = pool.length || 1;
+
+        /* document frequency for IDF */
+        const df = {};
+        terms.forEach(t => { df[t] = pool.reduce((n, d) => n + (docPlainText(d).toLowerCase().indexOf(t) >= 0 ? 1 : 0), 0) || 0.5; });
+
+        const results = [];
+        pool.forEach(d => {
+            const raw = docPlainText(d);
+            const low = raw.toLowerCase();
+            const title = (d.title || '').toLowerCase();
+            let score = 0, matched = 0;
+            terms.forEach(t => {
+                const idf = Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5));
+                let tf = 0, i = low.indexOf(t);
+                while (i >= 0 && tf < 30) { tf++; i = low.indexOf(t, i + t.length); }
+                if (tf) matched++;
+                score += idf * (tf * 2.2) / (tf + 1.2);                 /* BM25-ish saturation */
+                if (title.indexOf(t) >= 0) score += idf * 3.4;          /* title hits matter a lot */
+            });
+            if (!matched) return;
+            score *= (matched / terms.length) ** 1.8;                   /* reward covering the question */
+            if (low.indexOf(phrase) >= 0) score += 14;                  /* exact phrase */
+            if (d.pinned) score *= 1.08;
+            if (d.updatedAt && d.updatedAt.toDate) {
+                const days = (Date.now() - d.updatedAt.toDate().getTime()) / 864e5;
+                score *= 1 + Math.max(0, (60 - days)) / 300;            /* mild recency lift */
+            }
+
+            /* pull the best passage: score every line, keep its neighbours */
+            const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
+            let best = -1, bi = 0;
+            lines.forEach((ln, i) => {
+                const l = ln.toLowerCase();
+                let s = 0;
+                terms.forEach(t => { if (l.indexOf(t) >= 0) s += 1 + Math.log(1 + (N / df[t])); });
+                if (l.indexOf(phrase) >= 0) s += 6;
+                if (ln.length > 18 && ln.length < 260) s += 0.6;        /* prefer real sentences */
+                if (s > best) { best = s; bi = i; }
+            });
+            const passage = lines.slice(Math.max(0, bi - 1), bi + 2).join(' ').slice(0, 340);
+            results.push({ d: d, score: score, passage: passage || raw.slice(0, 200) });
+        });
+        return results.sort((a, b) => b.score - a.score).slice(0, 7);
+    }
+    function hl(text, q) {
+        const terms = [...new Set(tok(q).filter(w => w.length > 2 && !QSTOP.has(w)))]
+            .sort((a, b) => b.length - a.length);
+        let out = escapeHtml(text);
+        terms.forEach(t => {
+            out = out.replace(new RegExp('(?<![\\w>])(' + escapeRegExp(t) + ')(?![\\w<])', 'gi'), '<mark>$1</mark>');
+        });
+        return out;
+    }
+
+    window.askRun = (preset) => {
+        const q = (preset != null ? preset : $('ask-in').value).trim();
+        if (preset != null) $('ask-in').value = q;
+        if (q.length < 2) { renderExamples(); return; }
+        $('ask-thinking').classList.add('on');
+        $('ask-out').innerHTML = '';
+        setTimeout(() => {
+            let hits = [];
+            try { hits = search(q); } catch (e) { console.error(e); }
+            $('ask-thinking').classList.remove('on');
+            if (!hits.length) {
+                $('ask-out').innerHTML = '<div class="text-center text-muted text-[11.5px] py-10 leading-relaxed">Nothing in your notes matches that.<br>Try fewer words, or the exact term you wrote down.</div>';
+                return;
+            }
+            const top = hits[0].score;
+            $('ask-out').innerHTML =
+                '<div class="text-[9px] font-bold uppercase tracking-widest text-muted mb-2">' + hits.length + ' result' + (hits.length === 1 ? '' : 's') + '</div>' +
+                hits.map((h, i) =>
+                    '<div class="ak-hit" style="animation-delay:' + (i * 45) + 'ms">' +
+                    '<div class="ak-pass">' + hl(h.passage, q) + '</div>' +
+                    '<div class="ak-src">' +
+                    '<svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.6L19 8.4V19a2 2 0 01-2 2z"/></svg>' +
+                    '<span class="truncate">' + escapeHtml(h.d.title || 'Untitled') + '</span>' +
+                    (i === 0 && top > 8 ? '<span class="ak-score">BEST</span>' : '') +
+                    '<button class="ak-open" onclick="askOpen(\'' + h.d.id + '\')">Open →</button></div></div>'
+                ).join('');
+        }, 130);
+    };
+    window.askOpen = (id) => {
+        const d = state.docs.find(x => x.id === id);
+        closeAsk();
+        if (d) setTimeout(() => openDoc(d.id, d), 40);
+    };
+    let askT = null;
+    $('ask-in').addEventListener('input', () => { clearTimeout(askT); askT = setTimeout(() => askRun(), 320); });
+    $('ask-in').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(askT); askRun(); } });
+    ['focusin', 'pointerup'].forEach(ev => $('ask-in').addEventListener(ev, () => { try { zdArmProtect($('ask-in')); } catch (e) {} }));
+    $('ask-modal').addEventListener('click', e => { if (e.target.id === 'ask-modal') closeAsk(); });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && $('ask-modal').classList.contains('open')) {
+            e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); closeAsk();
+        }
+        /* Ctrl+/ opens Ask */
+        if ((e.ctrlKey || e.metaKey) && e.key === '/' && !state.isGuest) { e.preventDefault(); openAsk(); }
+    }, true);
+
+    try {
+        zdMenuInject2('ask', 'openAsk', 'Ask your notes', '<circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.35-4.35M11 8v.01M11 11v3"/>');
+        ZD_FEATURES.push({ id: 'ask', label: 'Ask your notes', fns: ['openAsk'] });
+        ZD_FEAT_ICONS.ask = '<circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.35-4.35M11 8v.01M11 11v3"/>';
+    } catch (e) {}
+    setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 600);
+})();
+
+     // New Code
+
+     /* ============================================================
+   V7.3 — TIMELINE & DAILY REVIEW
+   Timeline: what you learnt this week / month / year, drawn from
+   your headings, tags and completed tasks.
+   Daily review: each morning, notes that may be useful today.
+============================================================ */
+(function zd73() {
+    if (window.__zd73) return; window.__zd73 = true;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    #tl-modal,#dr-modal{z-index:128;}
+    .tl-seg{padding:6px 14px;border-radius:99px;font-size:11px;font-weight:800;color:#9ca3af;transition:all .16s ease;}
+    .tl-seg.on{background-image:var(--zd-grad);color:#fff;}
+    .tl-per{margin-bottom:16px;animation:tlIn .34s cubic-bezier(.22,1,.36,1) both;}
+    @keyframes tlIn{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}
+    .tl-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .tl-dot{width:9px;height:9px;border-radius:99px;background-image:var(--zd-grad);flex-shrink:0;
+        box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .16);}
+    .tl-when{font-size:11.5px;font-weight:800;color:var(--text-color);}
+    .tl-cnt{font-size:8.5px;font-weight:800;padding:1.5px 7px;border-radius:99px;
+        background:rgb(var(--accent-rgb) / .13);color:rgb(var(--accent-rgb));}
+    .tl-line{margin-left:4px;padding-left:16px;border-left:2px solid var(--border-color);}
+    .tl-item{display:flex;align-items:flex-start;gap:8px;width:100%;text-align:left;padding:7px 9px;
+        border-radius:9px;transition:background .15s ease;margin-bottom:2px;}
+    .tl-item:hover{background:rgba(127,127,127,.07);}
+    .tl-lrn{font-size:11.5px;color:var(--text-color);line-height:1.45;}
+    .tl-meta{font-size:9px;color:#9ca3af;margin-top:1px;}
+    .tl-stat{display:flex;gap:12px;padding:9px 11px;border-radius:10px;background:var(--bg-color);
+        border:1px solid var(--border-color);margin-bottom:10px;}
+    .tl-stat b{display:block;font-size:16px;font-weight:800;color:rgb(var(--accent-rgb));line-height:1.1;}
+    .tl-stat span{font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:700;}
+    .dr-card{border:1px solid var(--border-color);border-left:3px solid rgb(var(--accent-rgb));
+        border-radius:11px;background:var(--bg-color);padding:10px 12px;margin-bottom:7px;
+        width:100%;text-align:left;transition:transform .15s ease,border-color .15s ease;}
+    .dr-card:hover{transform:translateX(3px);border-color:rgb(var(--accent-rgb) / .6);}
+    .dr-why{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+        color:rgb(var(--accent-rgb));margin-bottom:2px;}
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="tl-modal" class="zd-cmodal"><div class="zd-cmodal-box max-w-lg flex flex-col" style="max-height:86vh">
+      <div class="flex items-center justify-between mb-3 flex-shrink-0">
+        <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg> Timeline</h3>
+        <button onclick="closeTimeline()" class="zdvh-x">×</button>
+      </div>
+      <div class="flex gap-1 mb-3 bg-bg border border-border rounded-full p-0.5 w-fit flex-shrink-0">
+        <button class="tl-seg on" data-r="week" onclick="tlRange('week')">This week</button>
+        <button class="tl-seg" data-r="month" onclick="tlRange('month')">This month</button>
+        <button class="tl-seg" data-r="year" onclick="tlRange('year')">This year</button>
+      </div>
+      <div id="tl-body" class="flex-1 min-h-0 overflow-y-auto zd-scroll pr-1"></div>
+    </div></div>
+
+    <div id="dr-modal" class="zd-cmodal"><div class="zd-cmodal-box max-w-md flex flex-col" style="max-height:84vh">
+      <div class="flex items-center justify-between mb-1 flex-shrink-0">
+        <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4l1.4-1.4"/></svg> Daily review</h3>
+        <button onclick="closeDaily()" class="zdvh-x">×</button>
+      </div>
+      <div id="dr-date" class="text-[10.5px] text-muted mb-3 flex-shrink-0"></div>
+      <div id="dr-body" class="flex-1 min-h-0 overflow-y-auto zd-scroll pr-1"></div>
+    </div></div>`);
+
+    const $ = id => document.getElementById(id);
+    const ts = v => (v && v.toDate) ? v.toDate().getTime() : 0;
+
+    /* ---------- TIMELINE ---------- */
+    let tlR = 'week';
+    window.openTimeline = () => {
+        if (state.isGuest) { showToast('Sign in first.'); return; }
+        $('tl-modal').classList.add('open'); renderTl();
+    };
+    window.closeTimeline = () => $('tl-modal').classList.remove('open');
+    window.tlRange = (r) => {
+        tlR = r;
+        document.querySelectorAll('.tl-seg').forEach(b => b.classList.toggle('on', b.dataset.r === r));
+        renderTl();
+    };
+    /* "what you learnt" = headings + bold-ish first lines inside a note */
+    function learnings(d) {
+        const out = [];
+        ((d.content && d.content.ops) || []).forEach((op, i, arr) => {
+            if (typeof op.insert !== 'string') return;
+            const a = op.attributes || {};
+            if (a.header && a.header <= 3) {
+                const prev = arr[i - 1];
+                const t = (prev && typeof prev.insert === 'string') ? prev.insert.trim() : '';
+                if (t && t.length > 3 && t.length < 120) out.push(t);
+            }
+        });
+        if (!out.length) {
+            const first = docPlainText(d).split('\n').map(s => s.trim()).find(s => s.length > 14);
+            if (first) out.push(first.slice(0, 120));
+        }
+        return out.slice(0, 4);
+    }
+    function renderTl() {
+        const now = Date.now();
+        const span = tlR === 'week' ? 7 : tlR === 'month' ? 31 : 366;
+        const cut = now - span * 864e5;
+        const pool = state.docs.filter(d => !(d.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(d.id))))
+            .filter(d => Math.max(ts(d.createdAt), ts(d.updatedAt)) >= cut)
+            .sort((a, b) => Math.max(ts(b.createdAt), ts(b.updatedAt)) - Math.max(ts(a.createdAt), ts(a.updatedAt)));
+
+        if (!pool.length) {
+            $('tl-body').innerHTML = '<div class="text-center text-muted text-[11.5px] py-12 leading-relaxed">Nothing recorded in this period yet.<br>Write a note and it appears here.</div>';
+            return;
+        }
+        /* headline numbers */
+        let words = 0, done = 0, tagSet = new Set();
+        pool.forEach(d => {
+            const t = docPlainText(d).trim();
+            words += t ? t.split(/\s+/).length : 0;
+            ((d.content && d.content.ops) || []).forEach(o => { if (o.attributes && o.attributes.list === 'checked') done++; });
+            docTags(d).forEach(x => tagSet.add(x));
+        });
+        /* bucket by day (week) or by week/month */
+        const label = (t) => {
+            const dt = new Date(t);
+            if (tlR === 'week') return dt.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
+            if (tlR === 'month') {
+                const wk = Math.ceil(dt.getDate() / 7);
+                return 'Week ' + wk + ' · ' + dt.toLocaleDateString(undefined, { month: 'long' });
+            }
+            return dt.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        };
+        const groups = {};
+        pool.forEach(d => {
+            const t = Math.max(ts(d.createdAt), ts(d.updatedAt));
+            const k = label(t);
+            (groups[k] = groups[k] || []).push(d);
+        });
+
+        let h = '<div class="tl-stat">' +
+            '<span><b>' + pool.length + '</b><span>Notes</span></span>' +
+            '<span><b>' + words.toLocaleString() + '</b><span>Words</span></span>' +
+            '<span><b>' + done + '</b><span>Tasks done</span></span>' +
+            '<span><b>' + tagSet.size + '</b><span>Topics</span></span></div>';
+
+        Object.keys(groups).forEach((k, gi) => {
+            const list = groups[k];
+            h += '<div class="tl-per" style="animation-delay:' + (gi * 60) + 'ms">' +
+                 '<div class="tl-hd"><span class="tl-dot"></span><span class="tl-when">' + escapeHtml(k) + '</span>' +
+                 '<span class="tl-cnt">' + list.length + '</span></div><div class="tl-line">';
+            list.slice(0, 8).forEach(d => {
+                const lrn = learnings(d);
+                const tags = docTags(d).slice(0, 3);
+                h += '<button class="tl-item" onclick="tlOpen(\'' + d.id + '\')">' +
+                     '<svg class="w-3 h-3 mt-1 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.6L19 8.4V19a2 2 0 01-2 2z"/></svg>' +
+                     '<span class="min-w-0 flex-1"><span class="block text-xs font-semibold text-text truncate">' + escapeHtml(d.title || 'Untitled') + '</span>' +
+                     (lrn.length ? '<span class="tl-lrn block">' + lrn.map(x => '· ' + escapeHtml(x)).join('<br>') + '</span>' : '') +
+                     (tags.length ? '<span class="tl-meta block">' + tags.map(t => '#' + escapeHtml(t)).join(' · ') + '</span>' : '') +
+                     '</span></button>';
+            });
+            if (list.length > 8) h += '<div class="tl-meta" style="padding:4px 9px">+ ' + (list.length - 8) + ' more</div>';
+            h += '</div></div>';
+        });
+        $('tl-body').innerHTML = h;
+    }
+    window.tlOpen = (id) => {
+        const d = state.docs.find(x => x.id === id);
+        closeTimeline(); if (d) setTimeout(() => openDoc(d.id, d), 40);
+    };
+
+    /* ---------- DAILY REVIEW ---------- */
+    window.openDaily = () => {
+        if (state.isGuest) { showToast('Sign in first.'); return; }
+        $('dr-modal').classList.add('open');
+        renderDr();
+        localStorage.setItem('zdDrSeen', new Date().toISOString().slice(0, 10));
+    };
+    window.closeDaily = () => $('dr-modal').classList.remove('open');
+    function renderDr() {
+        const now = new Date();
+        $('dr-date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+        const pool = state.docs.filter(d => !(d.lockHash && !(typeof zd46Unlocked !== 'undefined' && zd46Unlocked.has(d.id))));
+        const picks = [], seen = new Set();
+        const add = (d, why) => { if (d && !seen.has(d.id)) { seen.add(d.id); picks.push({ d: d, why: why }); } };
+
+        /* 1 — due today or overdue in the matrix */
+        pool.filter(d => d.eisDue && !d.eisDone && d.eisDue < now.getTime() + 864e5)
+            .sort((a, b) => a.eisDue - b.eisDue).slice(0, 3)
+            .forEach(d => add(d, d.eisDue < now.getTime() ? 'Overdue' : 'Due today'));
+        /* 2 — most open tasks */
+        pool.map(d => {
+            let n = 0; ((d.content && d.content.ops) || []).forEach(o => { if (o.attributes && o.attributes.list === 'unchecked') n++; });
+            return { d: d, n: n };
+        }).filter(x => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 3)
+          .forEach(x => add(x.d, x.n + ' open task' + (x.n === 1 ? '' : 's')));
+        /* 3 — same weekday last week (rhythm) */
+        pool.filter(d => {
+            const t = ts(d.updatedAt); if (!t) return false;
+            const dd = new Date(t), age = (now - t) / 864e5;
+            return dd.getDay() === now.getDay() && age > 5 && age < 22;
+        }).slice(0, 2).forEach(d => add(d, 'You worked on this last ' + now.toLocaleDateString(undefined, { weekday: 'long' })));
+        /* 4 — resurfaced: linked from something recent but untouched for a month */
+        const recent = pool.filter(d => ts(d.updatedAt) > now.getTime() - 7 * 864e5);
+        const linked = new Set();
+        recent.forEach(d => docLinks(d).forEach(l => linked.add(l.toLowerCase())));
+        pool.filter(d => linked.has((d.title || '').trim().toLowerCase()) && ts(d.updatedAt) < now.getTime() - 30 * 864e5)
+            .slice(0, 2).forEach(d => add(d, 'Referenced recently, not opened in a while'));
+        /* 5 — pinned, if room */
+        pool.filter(d => d.pinned).slice(0, 2).forEach(d => add(d, 'Pinned'));
+
+        const t = dailyTitle(now);
+        const hasDaily = state.docs.some(x => (x.title || '').trim() === t);
+        let h = '<button onclick="closeDaily();setTimeout(openDailyNote,120)" class="w-full py-2.5 mb-3 text-[11.5px] font-bold rounded-xl text-white active:scale-[.98] transition" style="background-image:var(--zd-grad)">' +
+                (hasDaily ? 'Open today’s note' : 'Start today’s note') + '</button>';
+        h += picks.length
+            ? '<div class="text-[9px] font-bold uppercase tracking-widest text-muted mb-2">These may be useful today</div>' +
+              picks.slice(0, 8).map(p =>
+                '<button class="dr-card" onclick="drOpen(\'' + p.d.id + '\')">' +
+                '<div class="dr-why">' + escapeHtml(p.why) + '</div>' +
+                '<div class="text-xs font-semibold text-text truncate">' + escapeHtml(p.d.title || 'Untitled') + '</div>' +
+                '<div class="text-[9.5px] text-muted truncate mt-0.5">' + escapeHtml(docPlainText(p.d).replace(/\n/g, ' ').slice(0, 90)) + '</div></button>').join('')
+            : '<div class="text-center text-muted text-[11.5px] py-8 leading-relaxed">Clear slate — nothing is due and no tasks are waiting.</div>';
+        $('dr-body').innerHTML = h;
+    }
+    window.drOpen = (id) => {
+        const d = state.docs.find(x => x.id === id);
+        closeDaily(); if (d) setTimeout(() => openDoc(d.id, d), 40);
+    };
+    /* offer it once per morning */
+    setTimeout(() => {
+        if (state.isGuest || !state.user) return;
+        const today = new Date().toISOString().slice(0, 10);
+        if (localStorage.getItem('zdDrSeen') === today) return;
+        if (new Date().getHours() > 12) return;              /* ⚙ only before noon */
+        showToast('Good morning — your daily review is ready.', 4500);
+        setTimeout(() => { if (localStorage.getItem('zdDrSeen') !== today) openDaily(); }, 2200);
+    }, 6000);
+
+    [['tl-modal', 'closeTimeline'], ['dr-modal', 'closeDaily']].forEach(([id, fn]) => {
+        $(id).addEventListener('click', e => { if (e.target.id === id) window[fn](); });
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        for (const [id, fn] of [['tl-modal', 'closeTimeline'], ['dr-modal', 'closeDaily']]) {
+            if ($(id).classList.contains('open')) {
+                e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                window[fn](); return;
+            }
+        }
+    }, true);
+
+    try {
+        zdMenuInject2('timeline', 'openTimeline', 'Timeline', '<circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/>');
+        zdMenuInject2('daily', 'openDaily', 'Daily review', '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2"/>');
+        ZD_FEATURES.push(
+            { id: 'timeline', label: 'Timeline', fns: ['openTimeline'] },
+            { id: 'daily', label: 'Daily review', fns: ['openDaily'] });
+        ZD_FEAT_ICONS.timeline = '<circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/>';
+        ZD_FEAT_ICONS.daily = '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M2 12h2m16 0h2"/>';
+    } catch (e) {}
+    setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 600);
+})();
+
+    // New Code
+
+    /* ============================================================
+   V7.4 — VOICE CAPTURE
+   Web Speech API: free, built into the browser, no account and no
+   third-party service. Continuous dictation with live interim text,
+   spoken punctuation, automatic sentence capitalisation, and a
+   language picker. Inserts at your cursor in the open note.
+   Chrome / Edge / Android: excellent · Safari: good · Firefox: n/a
+============================================================ */
+(function zd74() {
+    if (window.__zd74) return; window.__zd74 = true;
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    #vc-modal{z-index:129;}
+    #vc-orb{width:92px;height:92px;margin:4px auto 14px;border-radius:99px;position:relative;
+        display:flex;align-items:center;justify-content:center;background-image:var(--zd-grad);
+        box-shadow:0 14px 34px rgba(0,0,0,.3);transition:transform .2s ease;}
+    #vc-orb.live{animation:vcBreathe 1.9s ease-in-out infinite;}
+    @keyframes vcBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    #vc-orb::before,#vc-orb::after{content:'';position:absolute;inset:0;border-radius:99px;
+        border:2px solid rgb(var(--accent-rgb) / .5);opacity:0;}
+    #vc-orb.live::before{animation:vcRing 2.1s ease-out infinite;}
+    #vc-orb.live::after{animation:vcRing 2.1s ease-out .7s infinite;}
+    @keyframes vcRing{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+    #vc-orb svg{width:34px;height:34px;color:#fff;z-index:2;}
+    /* live level bars */
+    #vc-bars{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:22px;margin-bottom:12px;}
+    #vc-bars i{width:3px;border-radius:99px;background:rgb(var(--accent-rgb) / .55);height:4px;
+        transition:height .09s ease;}
+    #vc-txt{min-height:96px;max-height:34vh;overflow-y:auto;padding:12px 13px;border-radius:12px;
+        background:var(--bg-color);border:1px solid var(--border-color);font-size:13px;line-height:1.65;
+        color:var(--text-color);white-space:pre-wrap;}
+    #vc-txt .vc-int{color:#9ca3af;font-style:italic;}
+    #vc-txt:empty::before{content:'Your words appear here as you speak…';color:#9ca3af;font-size:12px;}
+    .vc-chip{padding:4px 9px;border-radius:99px;font-size:9px;font-weight:700;
+        background:var(--bg-color);border:1px solid var(--border-color);color:#9ca3af;}
+    </style>`);
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="vc-modal" class="zd-cmodal"><div class="zd-cmodal-box max-w-sm">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/></svg> Voice capture</h3>
+        <button onclick="closeVoice()" class="zdvh-x">×</button>
+      </div>
+      <div id="vc-state" class="text-[10.5px] text-muted mb-1">Tap the microphone and start speaking.</div>
+      <div id="vc-orb"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/></svg></div>
+      <div id="vc-bars"></div>
+      <div id="vc-txt"></div>
+      <div class="flex flex-wrap gap-1.5 mt-2.5 mb-3">
+        <span class="vc-chip">say “new line”</span><span class="vc-chip">“full stop”</span>
+        <span class="vc-chip">“comma”</span><span class="vc-chip">“question mark”</span>
+        <span class="vc-chip">“new paragraph”</span>
+      </div>
+      <select id="vc-lang" class="w-full mb-2.5 text-xs bg-bg text-text border border-border rounded-lg px-2 py-2 outline-none"></select>
+      <div class="grid grid-cols-2 gap-1.5">
+        <button id="vc-go" onclick="vcToggle()" class="py-2.5 text-xs font-bold rounded-xl text-white active:scale-95 transition" style="background-image:var(--zd-grad)">Start listening</button>
+        <button onclick="vcInsert()" class="py-2.5 text-xs font-semibold rounded-xl bg-bg border border-border text-text hover:border-accent transition active:scale-95">Insert into note</button>
+      </div>
+      <button onclick="vcClear()" class="w-full mt-1.5 py-2 text-[10.5px] font-semibold rounded-xl text-muted hover:text-danger transition">Clear</button>
+    </div></div>`);
+
+    const $ = id => document.getElementById(id);
+    const LANGS = [['en-US','English (US)'],['en-GB','English (UK)'],['en-IN','English (India)'],
+        ['hi-IN','हिन्दी'],['ta-IN','தமிழ்'],['te-IN','తెలుగు'],['ml-IN','മലയാളം'],['kn-IN','ಕನ್ನಡ'],
+        ['mr-IN','मराठी'],['bn-IN','বাংলা'],['gu-IN','ગુજરાતી'],['es-ES','Español'],['fr-FR','Français'],
+        ['de-DE','Deutsch'],['pt-BR','Português'],['it-IT','Italiano'],['ja-JP','日本語'],
+        ['ko-KR','한국어'],['zh-CN','中文'],['ar-SA','العربية'],['ru-RU','Русский']];
+    $('vc-lang').innerHTML = LANGS.map(([v, n]) => '<option value="' + v + '">' + n + '</option>').join('');
+    $('vc-lang').value = localStorage.getItem('zdVcLang') || (navigator.language || 'en-US');
+    $('vc-lang').onchange = () => {
+        localStorage.setItem('zdVcLang', $('vc-lang').value);
+        if (rec && listening) { stop(); setTimeout(start, 260); }
+    };
+    for (let i = 0; i < 13; i++) $('vc-bars').insertAdjacentHTML('beforeend', '<i></i>');
+
+    let rec = null, listening = false, finalText = '', interim = '', wantOn = false;
+    let audioCtx = null, analyser = null, micStream = null, rafId = null;
+
+    /* spoken punctuation → characters */
+    const CMDS = [
+        [/\b(new line|newline|next line)\b/gi, '\n'],
+        [/\b(new paragraph|next paragraph)\b/gi, '\n\n'],
+        [/\b(full stop|period)\b/gi, '.'],
+        [/\b(comma)\b/gi, ','],
+        [/\b(question mark)\b/gi, '?'],
+        [/\b(exclamation mark|exclamation point)\b/gi, '!'],
+        [/\b(colon)\b/gi, ':'], [/\b(semicolon)\b/gi, ';'],
+        [/\b(open bracket)\b/gi, '('], [/\b(close bracket)\b/gi, ')'],
+        [/\b(dash|hyphen)\b/gi, '-'], [/\b(bullet point|new bullet)\b/gi, '\n• ']
+    ];
+    function clean(s) {
+        CMDS.forEach(([re, ch]) => { s = s.replace(re, ch); });
+        s = s.replace(/\s+([.,!?;:])/g, '$1').replace(/([.,!?;:])(?=[^\s\n])/g, '$1 ');
+        s = s.replace(/[ \t]{2,}/g, ' ');
+        /* capitalise after . ! ? and at the start of a line */
+        s = s.replace(/(^|[.!?]\s+|\n\s*)([a-z])/g, (m, p, c) => p + c.toUpperCase());
+        s = s.replace(/\bi\b/g, 'I');
+        return s;
+    }
+    function paint() {
+        $('vc-txt').innerHTML = escapeHtml(finalText) + (interim ? '<span class="vc-int">' + escapeHtml(interim) + '</span>' : '');
+        $('vc-txt').scrollTop = $('vc-txt').scrollHeight;
+    }
+
+    async function levels() {
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 64;
+            audioCtx.createMediaStreamSource(micStream).connect(analyser);
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            const bars = Array.from($('vc-bars').children);
+            const tick = () => {
+                if (!listening) return;
+                analyser.getByteFrequencyData(data);
+                bars.forEach((b, i) => {
+                    const v = data[Math.floor(i * data.length / bars.length)] / 255;
+                    b.style.height = Math.max(4, v * 22) + 'px';
+                });
+                rafId = requestAnimationFrame(tick);
+            };
+            tick();
+        } catch (e) { /* level meter is optional */ }
+    }
+    function stopLevels() {
+        if (rafId) cancelAnimationFrame(rafId); rafId = null;
+        Array.from($('vc-bars').children).forEach(b => b.style.height = '4px');
+        try { if (micStream) micStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+        try { if (audioCtx) audioCtx.close(); } catch (e) {}
+        micStream = null; audioCtx = null;
+    }
+
+    function start() {
+        if (!SR) { showToast('Voice input isn’t supported in this browser — try Chrome, Edge or Safari.', 4200); return; }
+        rec = new SR();
+        rec.lang = $('vc-lang').value;
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.maxAlternatives = 1;
+        rec.onstart = () => {
+            listening = true; wantOn = true;
+            $('vc-orb').classList.add('live');
+            $('vc-go').textContent = 'Stop listening';
+            $('vc-state').textContent = 'Listening… speak naturally.';
+            levels();
+            try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+        };
+        rec.onresult = (e) => {
+            interim = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                const txt = e.results[i][0].transcript;
+                if (e.results[i].isFinal) {
+                    finalText = (finalText + ' ' + txt).replace(/\s{2,}/g, ' ').trimStart();
+                    finalText = clean(finalText);
+                } else interim += txt;
+            }
+            paint();
+        };
+        rec.onerror = (e) => {
+            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                wantOn = false;
+                showToast('Microphone blocked — allow it in your browser’s site settings.', 4500);
+            } else if (e.error === 'no-speech') { $('vc-state').textContent = 'Didn’t catch that — keep going.'; }
+        };
+        rec.onend = () => {
+            listening = false;
+            $('vc-orb').classList.remove('live');
+            stopLevels();
+            if (wantOn) { try { rec.start(); return; } catch (e) {} }   /* auto-restart: browsers cut off after ~60s */
+            $('vc-go').textContent = 'Start listening';
+            $('vc-state').textContent = finalText ? 'Paused — insert it, or keep going.' : 'Tap the microphone and start speaking.';
+        };
+        try { rec.start(); } catch (e) { showToast('Could not start the microphone.'); }
+    }
+    function stop() {
+        wantOn = false;
+        try { if (rec) rec.stop(); } catch (e) {}
+        listening = false;
+        $('vc-orb').classList.remove('live');
+        stopLevels();
+        $('vc-go').textContent = 'Start listening';
+    }
+    window.vcToggle = () => { listening ? stop() : start(); };
+    window.vcClear = () => { finalText = ''; interim = ''; paint(); $('vc-state').textContent = 'Cleared.'; };
+    window.vcInsert = () => {
+        const t = (finalText + ' ' + interim).trim();
+        if (!t) { showToast('Nothing captured yet.'); return; }
+        if (state.isGuest || !state.docId) { showToast('Open a note first.'); return; }
+        if (document.body.classList.contains('zd-read')) { try { zdUnsealNote(); } catch (e) {} }
+        stop();
+        const sel = quill.getSelection();
+        const at = sel ? sel.index : quill.getLength() - 1;
+        quill.insertText(at, t + ' ', 'user');
+        quill.setSelection(at + t.length + 1, 0, 'silent');
+        try { scanInlineTokens(true); } catch (e) {}
+        finalText = ''; interim = ''; paint();
+        closeVoice();
+        showToast('Added ' + t.split(/\s+/).length + ' words to your note.');
+    };
+    window.openVoice = () => {
+        if (state.isGuest) { showToast('Sign in first.'); return; }
+        if (!SR) { showToast('Voice input needs Chrome, Edge, Safari or Android.', 4200); return; }
+        $('vc-modal').classList.add('open');
+        paint();
+    };
+    window.closeVoice = () => { stop(); $('vc-modal').classList.remove('open'); };
+    $('vc-orb').onclick = () => vcToggle();
+    $('vc-modal').addEventListener('click', e => { if (e.target.id === 'vc-modal') closeVoice(); });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && $('vc-modal').classList.contains('open')) {
+            e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); closeVoice();
+        }
+        /* Alt+V */
+        if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key || '').toLowerCase() === 'v' && !state.isGuest) {
+            e.preventDefault(); openVoice();
+        }
+    }, true);
+    window.addEventListener('pagehide', stop);
+
+    try {
+        zdMenuInject2('voice', 'openVoice', 'Voice capture', '<rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/>');
+        ZD_FEATURES.push({ id: 'voice', label: 'Voice capture', fns: ['openVoice'] });
+        ZD_FEAT_ICONS.voice = '<rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/>';
+    } catch (e) {}
+    setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 600);
+})();    
 
 
     /* ============================================================
