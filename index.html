@@ -5611,15 +5611,16 @@
                 ? '<span class="ol-ch" style="transform:' + (_outlineCollapsed.has(it.key) ? 'rotate(-90deg)' : 'none') + '">\u25be</span>'
                 : '<span class="ol-ch"></span>';
             b.innerHTML = ch + '<span class="truncate">' + escapeHtml(it.text) + '</span>';
-            b.onclick = (e) => {
-                if (!q && it.hasChildren && e.target.closest('.ol-ch')) {
-                    if (_outlineCollapsed.has(it.key)) _outlineCollapsed.delete(it.key); else _outlineCollapsed.add(it.key);
-                    renderOutline();
-                    return;
-                }
-                try { it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {}
-            };
-            el.appendChild(b);
+            // b.onclick = (e) => {
+            //     if (!q && it.hasChildren && e.target.closest('.ol-ch')) {
+            //         if (_outlineCollapsed.has(it.key)) _outlineCollapsed.delete(it.key); else _outlineCollapsed.add(it.key);
+            //         renderOutline();
+            //         return;
+            //     }
+            //     try { it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {}
+            // };
+            // el.appendChild(b);
+            b.onclick = () => { zdScrollToNode(line.domNode); };
         });
         updateOutlineActive();
     }
@@ -10637,7 +10638,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             b.className = 'ol-item w-full text-left text-xs py-1 rounded-r-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-text transition flex items-center';
             b.style.paddingLeft = (4 + (Math.min(it.lvl, 4) - 1) * 13) + 'px';
             b.innerHTML = '<span class="ol-ch"></span><span class="truncate">' + escapeHtml(it.txt) + '</span>';
-            b.onclick = () => { try { it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} };
+            b.onclick = () => { zdScrollToNode(it.node); };
             el.appendChild(b);
         });
     }
@@ -13418,6 +13419,20 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     setTimeout(() => seal('boot'), 1800);
 })();
 
+     // New Code
+
+     /* scroll a heading into view WITHOUT moving the page/header:
+   only the editor's own scroll container is scrolled */
+window.zdScrollToNode = function (node) {
+    try {
+        const scroller = document.getElementById('editor-wrapper');
+        if (!scroller || !node) return;
+        const sr = scroller.getBoundingClientRect();
+        const nr = node.getBoundingClientRect();
+        scroller.scrollTo({ top: scroller.scrollTop + (nr.top - sr.top) - 24, behavior: 'smooth' });
+    } catch (e) {}
+};   
+
      /* ============================================================
    V6.3b — QUICK CAPTURE: SVG only, no ⚡ emoji anywhere
 ============================================================ */
@@ -13655,13 +13670,38 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
       <div id="cn-note" class="text-[10.5px] text-muted truncate mb-3 flex-shrink-0"></div>
       <div id="cn-body" class="flex-1 min-h-0 overflow-y-auto zd-scroll pr-1"></div>
       <div class="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-border flex-shrink-0">
-        <span class="text-[10.5px] text-text leading-snug">Link &amp; tag automatically<br><span class="text-[9px] text-muted">Applies on save, in every note</span></span>
+        <span class="text-[10.5px] text-text leading-snug">Link &amp; tag automatically<br><span class="text-[9px] text-muted">Applies on save, in every note · syncs to all your devices</span></span>
         <button id="cn-auto" class="cn-sw"><i></i></button>
       </div>
     </div></div>`);
 
     const $ = id => document.getElementById(id);
-    const autoOn = () => (localStorage.getItem('zdAutoLink') ?? (AUTO_DEFAULT ? '1' : '0')) === '1';
+    // New Code
+    let _autoCache = null;
+    const autoOn = () => {
+        if (_autoCache !== null) return _autoCache;
+        return (localStorage.getItem('zdAutoLink') ?? (AUTO_DEFAULT ? '1' : '0')) === '1';
+    };
+    /* cloud sync: the setting lives in users/{uid}/settings/prefs and a
+       realtime listener mirrors changes to every logged-in device */
+    function prefsRef() { return db.collection('users').doc(state.user.uid).collection('settings').doc('prefs'); }
+    let _prefsArmed = false;
+    function armPrefs() {
+        if (_prefsArmed || state.isGuest || !state.user) return;
+        _prefsArmed = true;
+        prefsRef().onSnapshot(snap => {
+            if (!snap.exists) return;
+            const v = !!snap.data().autoLink;
+            const was = _autoCache;
+            _autoCache = v;
+            localStorage.setItem('zdAutoLink', v ? '1' : '0');
+            const sw = document.getElementById('cn-auto');
+            if (sw) sw.classList.toggle('on', v);
+            if (was !== null && was !== v) showToast(v ? 'Auto-connect turned on from another device.' : 'Auto-connect turned off from another device.');
+        }, () => {});
+    }
+    setTimeout(armPrefs, 2500);
+    setInterval(() => { if (!_prefsArmed) armPrefs(); }, 4000);
     const STOP = new Set('the a an and or but if of to in on for with at by from as is are was were be been it its this that these those i you he she we they not no do does did can could will would should may might must have has had about into over under again more most some such only own same so than too very just also there here when where why how what which who while during before after above below up down out off all any both each few other new note notes untitled document'.split(' '));
 
     /* ---------- candidate links: other note titles appearing in this note ---------- */
@@ -13803,9 +13843,11 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
     }
     $('cn-auto').onclick = () => {
         const next = !autoOn();
+        _autoCache = next;
         localStorage.setItem('zdAutoLink', next ? '1' : '0');
         $('cn-auto').classList.toggle('on', next);
-        showToast(next ? 'Auto-connect on — links and tags apply as you save.' : 'Auto-connect off.');
+        try { prefsRef().set({ autoLink: next }, { merge: true }); } catch (e) {}
+        showToast(next ? 'Auto-connect on — synced to all your devices.' : 'Auto-connect off — synced to all your devices.');
     };
     $('conn-modal').addEventListener('click', e => { if (e.target.id === 'conn-modal') closeConnections(); });
     document.addEventListener('keydown', e => {
@@ -14415,10 +14457,36 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         $('vc-txt').scrollTop = $('vc-txt').scrollHeight;
     }
 
+    // async function levels() {
+    //     try {
+    //         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    //         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    //         analyser = audioCtx.createAnalyser();
+    //         analyser.fftSize = 64;
+    //         audioCtx.createMediaStreamSource(micStream).connect(analyser);
+    //         const data = new Uint8Array(analyser.frequencyBinCount);
+    //         const bars = Array.from($('vc-bars').children);
+    //         const tick = () => {
+    //             if (!listening) return;
+    //             analyser.getByteFrequencyData(data);
+    //             bars.forEach((b, i) => {
+    //                 const v = data[Math.floor(i * data.length / bars.length)] / 255;
+    //                 b.style.height = Math.max(4, v * 22) + 'px';
+    //             });
+    //             rafId = requestAnimationFrame(tick);
+    //         };
+    //         tick();
+    //     } catch (e) { /* level meter is optional */ }
+    // }
     async function levels() {
+        /* the level meter opens a SECOND mic stream, which breaks
+           SpeechRecognition on Android/many devices — only run it on
+           desktop, and never let a failure affect recognition */
+        if (window.innerWidth < 900 || !navigator.mediaDevices) return;
         try {
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
             analyser = audioCtx.createAnalyser();
             analyser.fftSize = 64;
             audioCtx.createMediaStreamSource(micStream).connect(analyser);
@@ -14434,7 +14502,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
                 rafId = requestAnimationFrame(tick);
             };
             tick();
-        } catch (e) { /* level meter is optional */ }
+        } catch (e) { /* meter is cosmetic — recognition continues without it */ }
     }
     function stopLevels() {
         if (rafId) cancelAnimationFrame(rafId); rafId = null;
@@ -14444,19 +14512,32 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         micStream = null; audioCtx = null;
     }
 
+    // function start() {
+    //     if (!SR) { showToast('Voice input isn’t supported in this browser — try Chrome, Edge or Safari.', 4200); return; }
+    //     rec = new SR();
     function start() {
-        if (!SR) { showToast('Voice input isn’t supported in this browser — try Chrome, Edge or Safari.', 4200); return; }
+        if (!SR) { showToast('Voice input isn\u2019t supported in this browser — try Chrome, Edge or Safari.', 4200); return; }
+        if (!window.isSecureContext) { showToast('Voice needs a secure (https) connection.', 4200); return; }
+        if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
         rec = new SR();
         rec.lang = $('vc-lang').value;
         rec.continuous = true;
         rec.interimResults = true;
         rec.maxAlternatives = 1;
+        // rec.onstart = () => {
+        //     listening = true; wantOn = true;
+        //     $('vc-orb').classList.add('live');
+        //     $('vc-go').textContent = 'Stop listening';
+        //     $('vc-state').textContent = 'Listening… speak naturally.';
+        //     levels();
+        //     try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+        // };
         rec.onstart = () => {
             listening = true; wantOn = true;
             $('vc-orb').classList.add('live');
             $('vc-go').textContent = 'Stop listening';
             $('vc-state').textContent = 'Listening… speak naturally.';
-            levels();
+            setTimeout(levels, 600);
             try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
         };
         rec.onresult = (e) => {
@@ -14470,11 +14551,26 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
             }
             paint();
         };
+        // rec.onerror = (e) => {
+        //     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        //         wantOn = false;
+        //         showToast('Microphone blocked — allow it in your browser’s site settings.', 4500);
+        //     } else if (e.error === 'no-speech') { $('vc-state').textContent = 'Didn’t catch that — keep going.'; }
+        // };
         rec.onerror = (e) => {
+            console.warn('[voice]', e.error);
             if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-                wantOn = false;
-                showToast('Microphone blocked — allow it in your browser’s site settings.', 4500);
-            } else if (e.error === 'no-speech') { $('vc-state').textContent = 'Didn’t catch that — keep going.'; }
+                wantOn = false; stop();
+                $('vc-state').textContent = 'Microphone blocked.';
+                showToast('Microphone blocked — tap the 🔒/ⓘ icon in the address bar and allow the mic, then try again.', 5200);
+            } else if (e.error === 'no-speech') {
+                $('vc-state').textContent = 'Didn\u2019t catch that — keep going.';
+            } else if (e.error === 'audio-capture') {
+                wantOn = false; stop();
+                showToast('No microphone found on this device.', 4200);
+            } else if (e.error === 'network') {
+                $('vc-state').textContent = 'Speech service unreachable — check your connection.';
+            }
         };
         rec.onend = () => {
             listening = false;
