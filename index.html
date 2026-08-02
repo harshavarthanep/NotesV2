@@ -15028,90 +15028,37 @@ window.zdScrollToNode = function (node) {
     }
 
     /* ============ OPEN / CLOSE with the tunnel ============ */
-    // window.openTrackers = () => {
-    //     if (state.isGuest) { showToast('Sign in to use trackers.'); return; }
-    //     const tn = $('trk-tunnel');
-    //     tn.querySelectorAll('.tn-r').forEach(n => n.remove());
-    //     for (let i = 0; i < 7; i++) {
-    //         const r = document.createElement('span');
-    //         r.className = 'tn-r';
-    //         r.style.animationDelay = (i * 78) + 'ms';
-    //         tn.appendChild(r);
-    //     }
-    //     tn.querySelector('.tn-lbl').textContent = 'entering the grid';
-    //     tn.className = 'on in';
-    //     try { if (navigator.vibrate) navigator.vibrate([6, 30, 10]); } catch (e) {}
-    //     setTimeout(() => {
-    //         try { closeAllViews(); } catch (e) {}
-    //         $('trk-modal').classList.add('open');
-    //         marquee(); watch(); render();
-    //         if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, 700);
-    //     }, TRK_TUNNEL_MS * 0.62);
-    //     setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 120);
-    // };
-    // window.closeTrackers = () => {
-    //     ['trk-edit', 'trk-log', 'trk-detail', 'trk-tourwrap'].forEach(i => $(i).classList.remove('open'));
-    //     const tn = $('trk-tunnel');
-    //     tn.querySelector('.tn-lbl').textContent = 'leaving the grid';
-    //     tn.className = 'on out';
-    //     $('trk-modal').classList.remove('open');
-    //     if (unsub) { unsub(); unsub = null; }
-    //     setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 60);
-    // };
-    const PHASES = ['initialising', 'linking neural grid', 'loading streaks', 'grid online'];
-    function tunnel(dir, cb) {
-        const tn = $('trk-tunnel');
-        tn.querySelectorAll('.tn-r,.tn-s').forEach(n => n.remove());
-        /* corridor rings */
-        for (let i = 0; i < 11; i++) {
-            const r = document.createElement('span');
-            r.className = 'tn-r';
-            r.style.animationDelay = (dir === 'in' ? i * 92 : (10 - i) * 92) + 'ms';
-            tn.appendChild(r);
-        }
-        /* radial speed streaks */
-        for (let i = 0; i < 26; i++) {
-            const s = document.createElement('span');
-            s.className = 'tn-s';
-            s.style.transform = 'rotate(' + (i * (360 / 26) + Math.random() * 8) + 'deg)';
-            s.style.animationDelay = (Math.random() * 340) + 'ms';
-            s.style.opacity = 0;
-            tn.appendChild(s);
-        }
-        tn.querySelector('.tn-lbl').textContent = dir === 'in' ? 'entering the grid' : 'leaving the grid';
-        let p = 0;
-        const pt = setInterval(() => {
-            p++; $('tn-pct').textContent = dir === 'in' ? (PHASES[p] || 'grid online') : 'disconnecting';
-            if (p >= PHASES.length) clearInterval(pt);
-        }, TRK_TUNNEL_MS / 4.4);
-        tn.className = 'on ' + dir;
-        try { if (navigator.vibrate) navigator.vibrate(dir === 'in' ? [8, 40, 12, 60, 18] : [14, 50, 8]); } catch (e) {}
-        setTimeout(cb, TRK_TUNNEL_MS * (dir === 'in' ? 0.66 : 0.5));
-        setTimeout(() => { clearInterval(pt); tn.className = ''; }, TRK_TUNNEL_MS + 140);
-    }
     window.openTrackers = () => {
         if (state.isGuest) { showToast('Sign in to use trackers.'); return; }
-        tunnel('in', () => {
+        const tn = $('trk-tunnel');
+        tn.querySelectorAll('.tn-r').forEach(n => n.remove());
+        for (let i = 0; i < 7; i++) {
+            const r = document.createElement('span');
+            r.className = 'tn-r';
+            r.style.animationDelay = (i * 78) + 'ms';
+            tn.appendChild(r);
+        }
+        tn.querySelector('.tn-lbl').textContent = 'entering the grid';
+        tn.className = 'on in';
+        try { if (navigator.vibrate) navigator.vibrate([6, 30, 10]); } catch (e) {}
+        setTimeout(() => {
             try { closeAllViews(); } catch (e) {}
-            const m = $('trk-modal');
-            m.classList.remove('trk-off');
-            m.classList.add('open', 'trk-boot');
+            $('trk-modal').classList.add('open');
             marquee(); watch(); render();
-            setTimeout(() => m.classList.remove('trk-boot'), TRK_BOOT_MS + 200);
-            if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, TRK_BOOT_MS + 500);
-        });
+            if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, 700);
+        }, TRK_TUNNEL_MS * 0.62);
+        setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 120);
     };
     window.closeTrackers = () => {
         ['trk-edit', 'trk-log', 'trk-detail', 'trk-tourwrap'].forEach(i => $(i).classList.remove('open'));
-        const m = $('trk-modal');
-        m.classList.add('trk-off');                    /* elements dissolve first */
-        setTimeout(() => {
-            tunnel('out', () => {
-                m.classList.remove('open', 'trk-off', 'trk-boot');
-                if (unsub) { unsub(); unsub = null; }
-            });
-        }, 300);
+        const tn = $('trk-tunnel');
+        tn.querySelector('.tn-lbl').textContent = 'leaving the grid';
+        tn.className = 'on out';
+        $('trk-modal').classList.remove('open');
+        if (unsub) { unsub(); unsub = null; }
+        setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 60);
     };
+    
     function marquee() {
         const pick = [];
         const s = LINES.slice().sort(() => Math.random() - 0.5);
