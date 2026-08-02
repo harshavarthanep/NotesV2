@@ -14772,6 +14772,31 @@ window.zdScrollToNode = function (node) {
         #trk-modal.trk-boot *{animation-duration:.2s!important;animation-delay:0ms!important}
     }
 
+    /* ============ SECTION SHELL ============ */
+    #trk-modal{position:fixed;inset:0;z-index:118;display:none;flex-direction:column;
+        background:#080b11;color:#e8ecf5;}
+    #trk-modal.open{display:flex;animation:trkIn .34s cubic-bezier(.22,1,.36,1);}
+    @keyframes trkIn{0%{opacity:0;transform:scale(1.03)}100%{opacity:1;transform:none}}
+    html:not(.dark) #trk-modal{background:#0b0e15;}
+    #trk-modal::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+        background:radial-gradient(700px 420px at 12% 6%,rgb(var(--accent-rgb) / .2),transparent 60%),
+                   radial-gradient(560px 380px at 92% 94%,rgb(var(--accent-rgb) / .14),transparent 58%);}
+    #trk-modal::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.5;
+        background:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 3px);}
+    #trk-modal > *{position:relative;z-index:2;}
+    .trk-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+        padding:0 12px;min-height:54px;border-bottom:1px solid rgba(255,255,255,.09);flex-shrink:0;
+        background:rgba(8,11,17,.8);backdrop-filter:blur(10px);}
+    .trk-t{font-size:14px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+        background-image:var(--zd-grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+    .trk-b{width:30px;height:30px;border-radius:99px;display:inline-flex;align-items:center;
+        justify-content:center;color:#8b93a1;transition:all .15s ease;flex-shrink:0;}
+    .trk-b svg{width:16px;height:16px;}
+    .trk-b:hover{color:rgb(var(--accent-rgb));background:rgb(var(--accent-rgb) / .14);}
+    .trk-x{width:32px;height:32px;border-radius:99px;display:flex;align-items:center;justify-content:center;
+        font-size:21px;line-height:1;color:#8b93a1;flex-shrink:0;transition:all .15s ease;}
+    .trk-x:hover{color:#ff5f57;background:rgba(255,95,87,.13);}
+
     /* ============ MARQUEE ============ */
     #trk-marq{overflow:hidden;white-space:nowrap;flex-shrink:0;padding:7px 0;
         border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);}
@@ -15028,35 +15053,89 @@ window.zdScrollToNode = function (node) {
     }
 
     /* ============ OPEN / CLOSE with the tunnel ============ */
-    window.openTrackers = () => {
-        if (state.isGuest) { showToast('Sign in to use trackers.'); return; }
+    // window.openTrackers = () => {
+    //     if (state.isGuest) { showToast('Sign in to use trackers.'); return; }
+    //     const tn = $('trk-tunnel');
+    //     tn.querySelectorAll('.tn-r').forEach(n => n.remove());
+    //     for (let i = 0; i < 7; i++) {
+    //         const r = document.createElement('span');
+    //         r.className = 'tn-r';
+    //         r.style.animationDelay = (i * 78) + 'ms';
+    //         tn.appendChild(r);
+    //     }
+    //     tn.querySelector('.tn-lbl').textContent = 'entering the grid';
+    //     tn.className = 'on in';
+    //     try { if (navigator.vibrate) navigator.vibrate([6, 30, 10]); } catch (e) {}
+    //     setTimeout(() => {
+    //         try { closeAllViews(); } catch (e) {}
+    //         $('trk-modal').classList.add('open');
+    //         marquee(); watch(); render();
+    //         if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, 700);
+    //     }, TRK_TUNNEL_MS * 0.62);
+    //     setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 120);
+    // };
+    // window.closeTrackers = () => {
+    //     ['trk-edit', 'trk-log', 'trk-detail', 'trk-tourwrap'].forEach(i => $(i).classList.remove('open'));
+    //     const tn = $('trk-tunnel');
+    //     tn.querySelector('.tn-lbl').textContent = 'leaving the grid';
+    //     tn.className = 'on out';
+    //     $('trk-modal').classList.remove('open');
+    //     if (unsub) { unsub(); unsub = null; }
+    //     setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 60);
+    // };
+    const PHASES = ['initialising', 'linking neural grid', 'loading streaks', 'grid online'];
+    function tunnel(dir, cb) {
         const tn = $('trk-tunnel');
-        tn.querySelectorAll('.tn-r').forEach(n => n.remove());
-        for (let i = 0; i < 7; i++) {
+        tn.querySelectorAll('.tn-r,.tn-s').forEach(n => n.remove());
+        /* corridor rings */
+        for (let i = 0; i < 11; i++) {
             const r = document.createElement('span');
             r.className = 'tn-r';
-            r.style.animationDelay = (i * 78) + 'ms';
+            r.style.animationDelay = (dir === 'in' ? i * 92 : (10 - i) * 92) + 'ms';
             tn.appendChild(r);
         }
-        tn.querySelector('.tn-lbl').textContent = 'entering the grid';
-        tn.className = 'on in';
-        try { if (navigator.vibrate) navigator.vibrate([6, 30, 10]); } catch (e) {}
-        setTimeout(() => {
+        /* radial speed streaks */
+        for (let i = 0; i < 26; i++) {
+            const s = document.createElement('span');
+            s.className = 'tn-s';
+            s.style.transform = 'rotate(' + (i * (360 / 26) + Math.random() * 8) + 'deg)';
+            s.style.animationDelay = (Math.random() * 340) + 'ms';
+            s.style.opacity = 0;
+            tn.appendChild(s);
+        }
+        tn.querySelector('.tn-lbl').textContent = dir === 'in' ? 'entering the grid' : 'leaving the grid';
+        let p = 0;
+        const pt = setInterval(() => {
+            p++; $('tn-pct').textContent = dir === 'in' ? (PHASES[p] || 'grid online') : 'disconnecting';
+            if (p >= PHASES.length) clearInterval(pt);
+        }, TRK_TUNNEL_MS / 4.4);
+        tn.className = 'on ' + dir;
+        try { if (navigator.vibrate) navigator.vibrate(dir === 'in' ? [8, 40, 12, 60, 18] : [14, 50, 8]); } catch (e) {}
+        setTimeout(cb, TRK_TUNNEL_MS * (dir === 'in' ? 0.66 : 0.5));
+        setTimeout(() => { clearInterval(pt); tn.className = ''; }, TRK_TUNNEL_MS + 140);
+    }
+    window.openTrackers = () => {
+        if (state.isGuest) { showToast('Sign in to use trackers.'); return; }
+        tunnel('in', () => {
             try { closeAllViews(); } catch (e) {}
-            $('trk-modal').classList.add('open');
+            const m = $('trk-modal');
+            m.classList.remove('trk-off');
+            m.classList.add('open', 'trk-boot');
             marquee(); watch(); render();
-            if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, 700);
-        }, TRK_TUNNEL_MS * 0.62);
-        setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 120);
+            setTimeout(() => m.classList.remove('trk-boot'), TRK_BOOT_MS + 200);
+            if (!localStorage.getItem('zdTrkTour')) setTimeout(trkTour, TRK_BOOT_MS + 500);
+        });
     };
     window.closeTrackers = () => {
         ['trk-edit', 'trk-log', 'trk-detail', 'trk-tourwrap'].forEach(i => $(i).classList.remove('open'));
-        const tn = $('trk-tunnel');
-        tn.querySelector('.tn-lbl').textContent = 'leaving the grid';
-        tn.className = 'on out';
-        $('trk-modal').classList.remove('open');
-        if (unsub) { unsub(); unsub = null; }
-        setTimeout(() => { tn.className = ''; }, TRK_TUNNEL_MS + 60);
+        const m = $('trk-modal');
+        m.classList.add('trk-off');                    /* elements dissolve first */
+        setTimeout(() => {
+            tunnel('out', () => {
+                m.classList.remove('open', 'trk-off', 'trk-boot');
+                if (unsub) { unsub(); unsub = null; }
+            });
+        }, 300);
     };
     
     function marquee() {
