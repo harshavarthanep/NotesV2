@@ -16954,69 +16954,71 @@ window.zdScrollToNode = function (node) {
     #fx.on{display:block;}
     #fx .fx-l{position:absolute;inset:0;}
 
-               /* ============ CRT / LIGHT-DARK — signal-loss datamosh ============ */
-    #crt{position:fixed;inset:0;z-index:199;display:none;overflow:hidden;pointer-events:none;
-        background:var(--cr-from,#141414);}
-    #crt.on{display:block;animation:crtBox ${CRT_MS}ms steps(1) forwards,crtFlick ${CRT_MS}ms steps(1) forwards;}
-    @keyframes crtBox{0%{opacity:0}3%{opacity:1}95%{opacity:1}100%{opacity:0}}
-    /* subtle whole-frame instability — no blown-out white */
-    @keyframes crtFlick{0%,100%{filter:none}
-        7%{filter:brightness(1.22) contrast(1.14) saturate(.5)}10%{filter:none}
-        19%{filter:brightness(.78) saturate(.35)}22%{filter:none}
-        34%{filter:brightness(1.16) contrast(1.1) saturate(.55)}37%{filter:none}
-        52%{filter:brightness(.84) saturate(.4)}55%{filter:none}
-        71%{filter:brightness(1.1) saturate(.7)}74%{filter:none}
-        88%{filter:brightness(1.04)}91%{filter:none}}
+               /* ============ THEME SWITCH — scan dissolve & magical reveal ============ */
+    #crt{position:fixed;inset:0;z-index:199;display:none;overflow:hidden;pointer-events:none;}
+    #crt.on{display:block;}
 
-    /* torn horizontal slabs of the incoming theme */
-    #crt .cr-lines{position:absolute;inset:0;}
-    #crt .cr-ln{position:absolute;background:var(--cr-to,#f4efe6);opacity:0;
-        transform:scaleX(0);transform-origin:var(--o,left);}
-    #crt.on .cr-ln{animation:crtLn ${CRT_MS}ms cubic-bezier(.32,.9,.24,1) both;}
-    @keyframes crtLn{
-        0%{transform:scaleX(0) translateX(0);opacity:0}
-        10%{transform:scaleX(.34) translateX(var(--j1,0));opacity:.9}
-        20%{transform:scaleX(.19) translateX(var(--j2,0));opacity:1}
-        36%{transform:scaleX(.66) translateX(var(--j1,0));opacity:1}
-        48%{transform:scaleX(.48) translateX(var(--j2,0));opacity:1}
-        64%{transform:scaleX(.88) translateX(0);opacity:1}
-        74%{transform:scaleX(.79) translateX(var(--j1,0));opacity:1}
-        88%,100%{transform:scaleX(1) translateX(0);opacity:1}}
-    /* thin bright filaments riding the slab edges */
-    #crt .cr-fil{position:absolute;height:1px;background:var(--cr-to,#f4efe6);opacity:0;
-        transform:scaleX(0);transform-origin:var(--o,left);}
-    #crt.on .cr-fil{animation:crtFil ${CRT_MS}ms cubic-bezier(.2,1,.3,1) both;}
-    @keyframes crtFil{0%{transform:scaleX(0);opacity:0}
-        16%{transform:scaleX(1);opacity:.85}
-        30%{transform:scaleX(.4);opacity:.5}
-        58%{transform:scaleX(1);opacity:.75}
-        100%{transform:scaleX(1);opacity:0}}
-    /* displaced blocks — the datamosh texture */
-    #crt .cr-blk{position:absolute;background:var(--cr-to,#f4efe6);opacity:0;}
-    #crt.on .cr-blk{animation:crtBlk ${CRT_MS}ms steps(1) both;}
-    @keyframes crtBlk{0%,100%{opacity:0}
-        12%{opacity:.5;transform:translateX(var(--bx,0))}17%{opacity:0}
-        30%{opacity:.75;transform:translateX(calc(var(--bx,0) * -1.4))}35%{opacity:0}
-        50%{opacity:.6;transform:translateX(var(--bx,0))}55%{opacity:0}
-        70%{opacity:.85;transform:translateX(0)}80%{opacity:.4}90%{opacity:0}}
-    /* chroma bleed at the tear edges, very restrained */
-    #crt .cr-chr{position:absolute;left:0;right:0;height:2px;opacity:0;mix-blend-mode:screen;
-        background:linear-gradient(90deg,rgba(255,60,90,.5),transparent 22%,transparent 78%,rgba(60,180,255,.5));}
-    #crt.on .cr-chr{animation:crtChr ${CRT_MS}ms steps(1) both;}
-    @keyframes crtChr{0%,100%{opacity:0}
-        14%{opacity:.9;transform:translateX(-2.5vw)}19%{opacity:0}
-        38%{opacity:.8;transform:translateX(3vw)}43%{opacity:0}
-        62%{opacity:.55;transform:translateX(-1.5vw)}68%{opacity:0}}
-    /* rolling sync band */
-    #crt .cr-roll{position:absolute;left:0;right:0;height:46px;opacity:0;mix-blend-mode:soft-light;
-        background:linear-gradient(180deg,transparent,rgba(255,255,255,.75),transparent);}
-    #crt.on .cr-roll{animation:crtRoll ${CRT_MS}ms linear both;}
-    @keyframes crtRoll{0%{top:-14%;opacity:0}12%{opacity:.7}86%{opacity:.45}100%{top:110%;opacity:0}}
-    /* fine scanline weave, fades out as the signal locks */
-    #crt .cr-scan{position:absolute;inset:0;opacity:.3;mix-blend-mode:overlay;
-        background:repeating-linear-gradient(0deg,rgba(0,0,0,.42) 0 1px,transparent 1px 3px);}
-    #crt.on .cr-scan{animation:crtScan ${CRT_MS}ms steps(1) both;}
-    @keyframes crtScan{0%{opacity:.34}55%{opacity:.2}85%{opacity:.07}100%{opacity:0}}
+    /* the veil holds the OUTGOING theme. It climbs up to cover, holds while the
+       theme flips underneath, then peels down to reveal the new one. */
+    #crt .cr-veil{position:absolute;inset:0;background:var(--cr-from,#141414);
+        will-change:clip-path;
+        -webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0);}
+    #crt.on .cr-veil{animation:crtVeil ${CRT_MS}ms cubic-bezier(.62,.02,.34,1) forwards;}
+    @keyframes crtVeil{
+        0%  {-webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0)}
+        38% {-webkit-clip-path:inset(0 0 0 0);clip-path:inset(0 0 0 0)}
+        50% {-webkit-clip-path:inset(0 0 0 0);clip-path:inset(0 0 0 0)}
+        100%{-webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0)}}
+    /* faint scanline texture so the veil reads as a display, not a colour block */
+    #crt .cr-veil::after{content:'';position:absolute;inset:0;opacity:.22;
+        background:repeating-linear-gradient(0deg,rgba(128,128,128,.4) 0 1px,transparent 1px 3px);}
+
+    /* upward beam — dissolves the old theme */
+    #crt .cr-up{position:absolute;left:-8%;right:-8%;height:clamp(90px,16vh,190px);opacity:0;
+        will-change:transform,opacity;
+        background:linear-gradient(0deg,transparent,rgb(var(--accent-rgb) / .18) 34%,
+            rgb(var(--accent-rgb) / .5) 50%,rgba(255,255,255,.72) 54%,
+            rgb(var(--accent-rgb) / .3) 62%,transparent);
+        filter:blur(1px);}
+    #crt.on .cr-up{animation:crtUp ${CRT_MS}ms cubic-bezier(.62,.02,.34,1) forwards;}
+    @keyframes crtUp{0%{top:100%;opacity:0}
+        8%{opacity:1}30%{opacity:1}42%{top:-18%;opacity:0}100%{top:-18%;opacity:0}}
+
+    /* downward beam — the reveal edge */
+    #crt .cr-dn{position:absolute;left:-8%;right:-8%;height:clamp(110px,20vh,240px);opacity:0;
+        will-change:transform,opacity;
+        background:linear-gradient(180deg,transparent,rgb(var(--accent-rgb) / .14) 30%,
+            rgb(var(--accent-rgb) / .46) 46%,rgba(255,255,255,.85) 51%,
+            rgb(var(--accent-rgb) / .46) 56%,rgb(var(--accent-rgb) / .1) 72%,transparent);
+        filter:blur(.5px);}
+    #crt.on .cr-dn{animation:crtDn ${CRT_MS}ms cubic-bezier(.5,0,.28,1) forwards;}
+    @keyframes crtDn{0%,46%{top:-22%;opacity:0}
+        54%{opacity:1}92%{opacity:1}100%{top:104%;opacity:0}}
+    /* razor line riding the reveal edge */
+    #crt .cr-edge{position:absolute;left:0;right:0;height:2px;opacity:0;background:#fff;
+        box-shadow:0 0 26px 6px rgb(var(--accent-rgb) / .8),0 0 60px 14px rgb(var(--accent-rgb) / .35);}
+    #crt.on .cr-edge{animation:crtEdge ${CRT_MS}ms cubic-bezier(.5,0,.28,1) forwards;}
+    @keyframes crtEdge{0%,48%{top:-2%;opacity:0}
+        56%{opacity:1}90%{opacity:.9}100%{top:101%;opacity:0}}
+
+    /* sparkles that twinkle as the reveal edge passes them */
+    #crt .cr-sp{position:absolute;width:3px;height:3px;border-radius:99px;opacity:0;
+        background:#fff;box-shadow:0 0 8px 2px rgb(var(--accent-rgb) / .9);}
+    #crt.on .cr-sp{animation:crtSp 720ms cubic-bezier(.22,1,.36,1) both;}
+    @keyframes crtSp{0%{opacity:0;transform:scale(0) rotate(0)}
+        28%{opacity:1;transform:scale(1.9) rotate(45deg)}
+        60%{opacity:.8;transform:scale(1) rotate(90deg)}
+        100%{opacity:0;transform:scale(0) rotate(140deg) translateY(-14px)}}
+
+    /* soft haze in the NEW theme colour — the magical settle after the reveal */
+    #crt .cr-haze{position:absolute;inset:0;opacity:0;background:var(--cr-to,#f4efe6);}
+    #crt.on .cr-haze{animation:crtHaze ${CRT_MS}ms ease-out forwards;}
+    @keyframes crtHaze{0%,52%{opacity:0}66%{opacity:.34}100%{opacity:0}}
+
+    /* one gentle bloom at the moment of the flip */
+    #crt .cr-flash{position:absolute;inset:0;opacity:0;background:#fff;}
+    #crt.on .cr-flash{animation:crtFlash ${CRT_MS}ms ease-out forwards;}
+    @keyframes crtFlash{0%,40%{opacity:0}46%{opacity:.5}56%{opacity:.14}100%{opacity:0}}
 
     /* ============ 1. HOME — iris bloom ============ */
     .fx-iris{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:99px;
@@ -17130,9 +17132,13 @@ window.zdScrollToNode = function (node) {
     document.body.insertAdjacentHTML('beforeend', `
     <div id="fx"><div class="fx-l" id="fx-l"></div></div>
     <div id="crt">
-      <div class="cr-lines" id="cr-lines"></div>
-      <div class="cr-roll"></div>
-      <div class="cr-scan"></div>
+      <div class="cr-veil"></div>
+      <div class="cr-haze"></div>
+      <div class="cr-up"></div>
+      <div class="cr-dn"></div>
+      <div class="cr-edge"></div>
+      <div class="cr-flash"></div>
+      <div id="cr-sparks"></div>
     </div>`);
 
     const $ = id => document.getElementById(id);
@@ -17295,49 +17301,23 @@ window.zdScrollToNode = function (node) {
 //         });
 //     }, 900);
 // })();    
-         /* ============ LIGHT / DARK — signal-loss datamosh ============ */
-    const CR_DARK  = '#141414';   // ⚙ your dark-mode surface
-    const CR_LIGHT = '#f4efe6';   // ⚙ your paper-white surface
+         /* ============ THEME SWITCH — scan dissolve & magical reveal ============ */
     function crtBuild(from, to) {
-        const crt = $('crt'), host = $('cr-lines');
+        const crt = $('crt');
         crt.style.setProperty('--cr-from', from);
         crt.style.setProperty('--cr-to', to);
-        const narrow = window.innerWidth < 620;
-        const N = narrow ? 15 : 22;
-        let h = '', y = 0, rank = 0;
-        const order = [];
-        /* slabs of uneven height, so it reads as torn data not a shutter */
-        while (y < 100 && order.length < N) {
-            const hh = 1.2 + Math.random() * (narrow ? 7 : 5.6);
-            order.push({ y: y, h: Math.min(hh, 100 - y) });
-            y += hh + Math.random() * 1.8;
+        /* sparkles fire in step with the reveal edge as it passes their height */
+        const N = window.innerWidth < 620 ? 16 : 30;
+        const revealStart = CRT_MS * 0.52, revealSpan = CRT_MS * 0.46;
+        let h = '';
+        for (let i = 0; i < N; i++) {
+            const y = Math.random() * 100;
+            const s = 2 + Math.random() * 3;
+            h += `<span class="cr-sp" style="left:${(Math.random() * 100).toFixed(2)}%;top:${y.toFixed(2)}%;
+                width:${s.toFixed(1)}px;height:${s.toFixed(1)}px;
+                animation-delay:${Math.round(revealStart + y / 100 * revealSpan - 90)}ms"></span>`;
         }
-        /* reveal fans out from the middle */
-        const seq = order.map((s, i) => i).sort((a, b) =>
-            Math.abs(order[a].y - 50) - Math.abs(order[b].y - 50));
-        const step = CRT_MS * 0.016;
-        seq.forEach((i, r) => { order[i].d = r * step; });
-        order.forEach(s => {
-            const o = Math.random() > .5 ? 'right' : 'left';
-            const j1 = ((Math.random() - .5) * 5).toFixed(2) + 'vw';
-            const j2 = ((Math.random() - .5) * 7).toFixed(2) + 'vw';
-            h += `<span class="cr-ln" style="top:${s.y.toFixed(2)}%;height:${s.h.toFixed(2)}%;left:-8%;right:-8%;
-                --o:${o};--j1:${j1};--j2:${j2};animation-delay:${s.d.toFixed(0)}ms"></span>`;
-            h += `<span class="cr-fil" style="top:${(s.y + s.h).toFixed(2)}%;left:-8%;right:-8%;
-                --o:${o};animation-delay:${(s.d + step * 1.5).toFixed(0)}ms"></span>`;
-            h += `<span class="cr-chr" style="top:${(s.y + s.h * .5).toFixed(2)}%;
-                animation-delay:${(s.d * .6).toFixed(0)}ms"></span>`;
-            /* a couple of displaced blocks per slab */
-            const nb = 1 + Math.floor(Math.random() * 2);
-            for (let b = 0; b < nb; b++) {
-                const bw = 8 + Math.random() * 34, bx = Math.random() * (100 - bw);
-                h += `<span class="cr-blk" style="top:${s.y.toFixed(2)}%;height:${s.h.toFixed(2)}%;
-                    left:${bx.toFixed(1)}%;width:${bw.toFixed(1)}%;
-                    --bx:${((Math.random() - .5) * 16).toFixed(1)}vw;
-                    animation-delay:${(s.d * .8 + Math.random() * 60).toFixed(0)}ms"></span>`;
-            }
-        });
-        host.innerHTML = h;
+        $('cr-sparks').innerHTML = h;
     }
     const _tt = window.toggleTheme;
     if (typeof _tt === 'function') {
@@ -17345,11 +17325,15 @@ window.zdScrollToNode = function (node) {
             if (busy) return _tt.apply(this, arguments);
             busy = true;
             const wasDark = document.documentElement.classList.contains('dark');
-            crtBuild(wasDark ? CR_DARK : CR_LIGHT, wasDark ? CR_LIGHT : CR_DARK);
-            $('crt').className = 'on';
-            try { if (navigator.vibrate) navigator.vibrate([5, 22, 8, 26, 6]); } catch (e) {}
-            setTimeout(() => { _tt.call(this); }, Math.round(CRT_MS * 0.52));
-            setTimeout(() => { $('crt').className = ''; busy = false; }, CRT_MS + 60);
+            crtBuild(wasDark ? '#141414' : '#f4efe6', wasDark ? '#f4efe6' : '#141414');
+            const crt = $('crt');
+            crt.className = '';
+            void crt.offsetWidth;          /* restart the animations cleanly */
+            crt.className = 'on';
+            try { if (navigator.vibrate) navigator.vibrate([10, 120, 18]); } catch (e) {}
+            /* flip the real theme while the veil covers everything */
+            setTimeout(() => { _tt.call(this); }, Math.round(CRT_MS * 0.44));
+            setTimeout(() => { crt.className = ''; $('cr-sparks').innerHTML = ''; busy = false; }, CRT_MS + 80);
         };
     }
     setTimeout(() => {
