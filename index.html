@@ -17240,44 +17240,45 @@ window.zdScrollToNode = function (node) {
         }
     });
 
-    // /* ============ LIGHT / DARK CRT ============ */
-    // const _tt = window.toggleTheme;
-    // if (typeof _tt === 'function') {
-    //     window.toggleTheme = function () {
-    //         if (busy) return _tt.apply(this, arguments);
-    //         busy = true;
-    //         const goingDark = !document.documentElement.classList.contains('dark');
-    //         const crt = $('crt');
-    //         crt.querySelector('.cr-img').style.setProperty('--cr-bg',
-    //             document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
-    //         $('cr-lbl').textContent = goingDark ? 'night mode' : 'day mode';
-    //         crt.className = 'on';
-    //         try { if (navigator.vibrate) navigator.vibrate([8, 40, 14]); } catch (e) {}
-    //         /* flip the theme at the pinch point, while the screen is a white line */
-    //         setTimeout(() => {
-    //             _tt.call(this);
-    //             crt.querySelector('.cr-img').style.setProperty('--cr-bg',
-    //                 document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
-    //         }, Math.round(CRT_MS * 0.4));
-    //         setTimeout(() => { crt.className = ''; busy = false; }, CRT_MS + 60);
-    //     };
-    // }
-    // /* the theme button may be bound directly — re-point it */
-    // setTimeout(() => {
-    //     ['theme-btn', 'm-theme-btn'].forEach(id => {
-    //         const b = document.getElementById(id);
-    //         if (!b) return;
-    //         b.removeAttribute('onclick');
-    //         b.addEventListener('click', e => { e.preventDefault(); toggleTheme(); });
-    //     });
-    //     document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button').forEach(b => {
-    //         if (/light\s*\/\s*dark/i.test(b.textContent)) {
-    //             b.removeAttribute('onclick');
-    //             b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
-    //         }
-    //     });
-    // }, 900);
-            /* ============ LIGHT / DARK — scanline glitch wipe ============ */
+//     /* ============ LIGHT / DARK CRT ============ */
+//     const _tt = window.toggleTheme;
+//     if (typeof _tt === 'function') {
+//         window.toggleTheme = function () {
+//             if (busy) return _tt.apply(this, arguments);
+//             busy = true;
+//             const goingDark = !document.documentElement.classList.contains('dark');
+//             const crt = $('crt');
+//             crt.querySelector('.cr-img').style.setProperty('--cr-bg',
+//                 document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
+//             $('cr-lbl').textContent = goingDark ? 'night mode' : 'day mode';
+//             crt.className = 'on';
+//             try { if (navigator.vibrate) navigator.vibrate([8, 40, 14]); } catch (e) {}
+//             /* flip the theme at the pinch point, while the screen is a white line */
+//             setTimeout(() => {
+//                 _tt.call(this);
+//                 crt.querySelector('.cr-img').style.setProperty('--cr-bg',
+//                     document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
+//             }, Math.round(CRT_MS * 0.4));
+//             setTimeout(() => { crt.className = ''; busy = false; }, CRT_MS + 60);
+//         };
+//     }
+//     /* the theme button may be bound directly — re-point it */
+//     setTimeout(() => {
+//         ['theme-btn', 'm-theme-btn'].forEach(id => {
+//             const b = document.getElementById(id);
+//             if (!b) return;
+//             b.removeAttribute('onclick');
+//             b.addEventListener('click', e => { e.preventDefault(); toggleTheme(); });
+//         });
+//         document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button').forEach(b => {
+//             if (/light\s*\/\s*dark/i.test(b.textContent)) {
+//                 b.removeAttribute('onclick');
+//                 b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
+//             }
+//         });
+//     }, 900);
+// })();    
+     /* ============ LIGHT / DARK — scanline glitch wipe ============ */
     function crtLines(from, to) {
         const N = window.innerWidth < 620 ? 22 : 34;
         const lines = $('cr-lines'), tear = $('cr-tear');
@@ -17325,8 +17326,7 @@ window.zdScrollToNode = function (node) {
                 b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
             }
         });
-    }, 900);  
-// })();    
+    }, 900);     
 
     /* ============================================================
        INIT
