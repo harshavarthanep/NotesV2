@@ -17240,46 +17240,9 @@ window.zdScrollToNode = function (node) {
         }
     });
 
-//     /* ============ LIGHT / DARK CRT ============ */
-//     const _tt = window.toggleTheme;
-//     if (typeof _tt === 'function') {
-//         window.toggleTheme = function () {
-//             if (busy) return _tt.apply(this, arguments);
-//             busy = true;
-//             const goingDark = !document.documentElement.classList.contains('dark');
-//             const crt = $('crt');
-//             crt.querySelector('.cr-img').style.setProperty('--cr-bg',
-//                 document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
-//             $('cr-lbl').textContent = goingDark ? 'night mode' : 'day mode';
-//             crt.className = 'on';
-//             try { if (navigator.vibrate) navigator.vibrate([8, 40, 14]); } catch (e) {}
-//             /* flip the theme at the pinch point, while the screen is a white line */
-//             setTimeout(() => {
-//                 _tt.call(this);
-//                 crt.querySelector('.cr-img').style.setProperty('--cr-bg',
-//                     document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
-//             }, Math.round(CRT_MS * 0.4));
-//             setTimeout(() => { crt.className = ''; busy = false; }, CRT_MS + 60);
-//         };
-//     }
-//     /* the theme button may be bound directly — re-point it */
-//     setTimeout(() => {
-//         ['theme-btn', 'm-theme-btn'].forEach(id => {
-//             const b = document.getElementById(id);
-//             if (!b) return;
-//             b.removeAttribute('onclick');
-//             b.addEventListener('click', e => { e.preventDefault(); toggleTheme(); });
-//         });
-//         document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button').forEach(b => {
-//             if (/light\s*\/\s*dark/i.test(b.textContent)) {
-//                 b.removeAttribute('onclick');
-//                 b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
-//             }
-//         });
-//     }, 900);
-// })();    
-     /* ============ LIGHT / DARK — scanline glitch wipe ============ */
-    function crtLines(from, to) {
+    /* ============ LIGHT / DARK CRT ============ */
+
+     function crtLines(from, to) {
         const N = window.innerWidth < 620 ? 22 : 34;
         const lines = $('cr-lines'), tear = $('cr-tear');
         const crt = $('crt');
@@ -17298,21 +17261,30 @@ window.zdScrollToNode = function (node) {
         /* tear bands sit at three random heights each time */
         tear.style.top = (18 + Math.random() * 22) + '%';
         tear.style.height = (5 + Math.random() * 7) + '%';
-    }
+    }    
+        
     const _tt = window.toggleTheme;
     if (typeof _tt === 'function') {
         window.toggleTheme = function () {
             if (busy) return _tt.apply(this, arguments);
             busy = true;
-            const wasDark = document.documentElement.classList.contains('dark');
-            crtLines(wasDark ? '#141414' : '#f4efe6', wasDark ? '#f4efe6' : '#141414');
-            $('crt').className = 'on';
-            try { if (navigator.vibrate) navigator.vibrate([6, 26, 10, 30, 8]); } catch (e) {}
-            /* flip the real theme mid-glitch, hidden behind the tearing */
-            setTimeout(() => { _tt.call(this); }, Math.round(CRT_MS * 0.46));
-            setTimeout(() => { $('crt').className = ''; busy = false; }, CRT_MS + 60);
+            const goingDark = !document.documentElement.classList.contains('dark');
+            const crt = $('crt');
+            crt.querySelector('.cr-img').style.setProperty('--cr-bg',
+                document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
+            $('cr-lbl').textContent = goingDark ? 'night mode' : 'day mode';
+            crt.className = 'on';
+            try { if (navigator.vibrate) navigator.vibrate([8, 40, 14]); } catch (e) {}
+            /* flip the theme at the pinch point, while the screen is a white line */
+            setTimeout(() => {
+                _tt.call(this);
+                crt.querySelector('.cr-img').style.setProperty('--cr-bg',
+                    document.documentElement.classList.contains('dark') ? '#141414' : '#f4efe6');
+            }, Math.round(CRT_MS * 0.4));
+            setTimeout(() => { crt.className = ''; busy = false; }, CRT_MS + 60);
         };
     }
+    /* the theme button may be bound directly — re-point it */
     setTimeout(() => {
         ['theme-btn', 'm-theme-btn'].forEach(id => {
             const b = document.getElementById(id);
@@ -17326,8 +17298,58 @@ window.zdScrollToNode = function (node) {
                 b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
             }
         });
-    }, 900); 
-})();
+    }, 900);
+})();    
+//      /* ============ LIGHT / DARK — scanline glitch wipe ============ */
+//     function crtLines(from, to) {
+//         const N = window.innerWidth < 620 ? 22 : 34;
+//         const lines = $('cr-lines'), tear = $('cr-tear');
+//         const crt = $('crt');
+//         crt.style.setProperty('--cr-from', from);
+//         crt.style.setProperty('--cr-to', to);
+//         let h = '';
+//         const order = [];
+//         for (let i = 0; i < N; i++) order.push(i);
+//         /* reveal order fans out from the middle for a clean spread */
+//         order.sort((a, b) => Math.abs(a - N / 2) - Math.abs(b - N / 2));
+//         order.forEach((i, rank) => {
+//             h += `<span class="cr-ln" style="top:${(i / N * 100).toFixed(3)}%;height:${(100 / N + 0.12).toFixed(3)}%;
+//                 --o:${i % 2 ? 'right' : 'left'};animation-delay:${rank * (CRT_MS * 0.012)}ms"></span>`;
+//         });
+//         lines.innerHTML = h;
+//         /* tear bands sit at three random heights each time */
+//         tear.style.top = (18 + Math.random() * 22) + '%';
+//         tear.style.height = (5 + Math.random() * 7) + '%';
+//     }
+//     const _tt = window.toggleTheme;
+//     if (typeof _tt === 'function') {
+//         window.toggleTheme = function () {
+//             if (busy) return _tt.apply(this, arguments);
+//             busy = true;
+//             const wasDark = document.documentElement.classList.contains('dark');
+//             crtLines(wasDark ? '#141414' : '#f4efe6', wasDark ? '#f4efe6' : '#141414');
+//             $('crt').className = 'on';
+//             try { if (navigator.vibrate) navigator.vibrate([6, 26, 10, 30, 8]); } catch (e) {}
+//             /* flip the real theme mid-glitch, hidden behind the tearing */
+//             setTimeout(() => { _tt.call(this); }, Math.round(CRT_MS * 0.46));
+//             setTimeout(() => { $('crt').className = ''; busy = false; }, CRT_MS + 60);
+//         };
+//     }
+//     setTimeout(() => {
+//         ['theme-btn', 'm-theme-btn'].forEach(id => {
+//             const b = document.getElementById(id);
+//             if (!b) return;
+//             b.removeAttribute('onclick');
+//             b.addEventListener('click', e => { e.preventDefault(); toggleTheme(); });
+//         });
+//         document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button').forEach(b => {
+//             if (/light\s*\/\s*dark/i.test(b.textContent)) {
+//                 b.removeAttribute('onclick');
+//                 b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
+//             }
+//         });
+//     }, 900); 
+// })();
 
     /* ============================================================
        INIT
