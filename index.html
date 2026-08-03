@@ -16372,6 +16372,555 @@ window.zdScrollToNode = function (node) {
     setTimeout(() => paint(), 1400);
 })();    
 
+    // New Code
+
+     /* ============================================================
+   V8.2 — CONSEQUENCE ENGINE
+   The Grid physically degrades as you drift: flicker, cracks,
+   failing power, emergency lighting. At 7 days of neglect it
+   COLLAPSES — GRID-1 comes to the glass, takes over the screen,
+   reads your record back to you, then rebuilds itself with you.
+   Reads window.zdRobo (V8.1) · mounts over #trk-modal (V8.0)
+============================================================ */
+(function zd82() {
+    if (window.__zd82) return; window.__zd82 = true;
+    if (!window.zdTrk) { console.warn('[V8.2] needs V8.0 + V8.1'); return; }
+
+    /* ───────────────────────────────────────────────────────────
+       ⚙ CUSTOMISE
+       ─────────────────────────────────────────────────────────── */
+    const COL_DAYS   = 7;      // ⚙ consecutive drift days that trigger collapse
+    const COL_WARN   = 5;      // ⚙ day the emergency warning banner appears
+    const COL_TYPE   = 26;     // ⚙ typewriter speed (ms per character) — lower = faster
+    const COL_SKIP_MS = 4200;  // ⚙ how long before the Skip button appears
+    const COL_GRACE  = 7;      // ⚙ days of grace after a collapse before it can fire again
+    /* ─────────────────────────────────────────────────────────── */
+
+    const T = window.zdTrk, K = T.key, $ = id => document.getElementById(id);
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    /* ============ DAMAGE STATES ============ */
+    #trk-modal{transition:filter .8s ease;}
+    #trk-dmg{position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity 1s ease;overflow:hidden;}
+    #trk-dmg.on{opacity:1;}
+    /* static noise */
+    #trk-dmg .dm-noise{position:absolute;inset:-50%;opacity:0;mix-blend-mode:overlay;
+        background-image:repeating-conic-gradient(#fff 0% 0.0002%,transparent 0% 0.0004%);
+        background-size:180px 180px;animation:dmNoise .35s steps(3) infinite;}
+    @keyframes dmNoise{0%{transform:translate(0,0)}33%{transform:translate(-24px,14px)}66%{transform:translate(18px,-20px)}}
+    /* emergency wash */
+    #trk-dmg .dm-red{position:absolute;inset:0;opacity:0;
+        background:radial-gradient(1200px 600px at 50% -10%,rgba(220,38,38,.34),transparent 66%),
+                   linear-gradient(0deg,rgba(220,38,38,.14),transparent 40%);}
+    /* cracks */
+    #trk-dmg svg{position:absolute;inset:0;width:100%;height:100%;}
+    #trk-dmg .dm-crack{stroke:rgba(255,255,255,.5);stroke-width:1.3;fill:none;
+        filter:drop-shadow(0 0 5px rgba(255,95,87,.85));
+        stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.4s cubic-bezier(.4,0,.3,1);}
+    /* falling debris */
+    #trk-dmg .dm-bit{position:absolute;top:-6px;width:2px;height:9px;border-radius:1px;
+        background:rgba(255,255,255,.32);opacity:0;}
+    #trk-dmg.on .dm-bit{animation:dmFall linear infinite;}
+    @keyframes dmFall{0%{opacity:0;transform:translateY(0) rotate(0)}
+        8%{opacity:.7}100%{opacity:0;transform:translateY(105vh) rotate(340deg)}}
+    /* stage escalation */
+    body.dmg-2 #trk-dmg .dm-noise{opacity:.05}
+    body.dmg-3 #trk-dmg .dm-noise{opacity:.09}
+    body.dmg-4 #trk-dmg .dm-noise{opacity:.14}body.dmg-4 #trk-dmg .dm-red{opacity:.4}
+    body.dmg-5 #trk-dmg .dm-noise{opacity:.19}body.dmg-5 #trk-dmg .dm-red{opacity:.62;animation:dmSiren 2.6s ease-in-out infinite}
+    body.dmg-6 #trk-dmg .dm-noise{opacity:.25}body.dmg-6 #trk-dmg .dm-red{opacity:.85;animation:dmSiren 1.3s ease-in-out infinite}
+    @keyframes dmSiren{0%,100%{opacity:.28}50%{opacity:.9}}
+    body.dmg-3 #trk-modal{animation:dmFlick 7s steps(1) infinite;}
+    body.dmg-4 #trk-modal{animation:dmFlick 4.4s steps(1) infinite;}
+    body.dmg-5 #trk-modal{animation:dmFlick 2.6s steps(1) infinite;}
+    body.dmg-6 #trk-modal{animation:dmFlick 1.5s steps(1) infinite,dmShake 9s ease-in-out infinite;}
+    @keyframes dmFlick{0%,88%,100%{filter:none}
+        90%{filter:brightness(.32) saturate(.4)}91%{filter:none}
+        93%{filter:brightness(.5)}94%{filter:none}96%{filter:brightness(.24) hue-rotate(-14deg)}97%{filter:none}}
+    @keyframes dmShake{0%,92%,100%{transform:none}94%{transform:translate(-2px,1px)}96%{transform:translate(2px,-1px)}98%{transform:translate(-1px,0)}}
+    body.dmg-4 .trk-kpi,body.dmg-5 .trk-kpi,body.dmg-6 .trk-kpi{border-color:rgba(255,95,87,.3)!important;}
+    body.dmg-5 .tc,body.dmg-6 .tc{border-color:rgba(255,95,87,.26)!important;}
+    body.dmg-6 .trk-t{animation:dmGlitchT 3.4s steps(1) infinite;}
+    @keyframes dmGlitchT{0%,90%,100%{transform:none;opacity:1}92%{transform:translateX(-3px) skewX(7deg);opacity:.7}
+        94%{transform:translateX(3px) skewX(-5deg)}96%{transform:none}}
+    /* warning banner */
+    #trk-warn{display:none;flex-shrink:0;align-items:center;gap:9px;padding:9px 13px;
+        border-bottom:1px solid rgba(220,38,38,.4);background:rgba(220,38,38,.14);
+        animation:warnPulse 2s ease-in-out infinite;}
+    #trk-warn.on{display:flex;}
+    @keyframes warnPulse{0%,100%{background:rgba(220,38,38,.11)}50%{background:rgba(220,38,38,.22)}}
+    #trk-warn svg{width:16px;height:16px;color:#ff5f57;flex-shrink:0;animation:warnRot 4s linear infinite;}
+    @keyframes warnRot{0%,80%{transform:none}90%{transform:scale(1.2)}100%{transform:none}}
+    #trk-warn b{font-size:10.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#ff8a80;}
+    #trk-warn span{font-size:10.5px;color:#e8b4b0;line-height:1.4;min-width:0;}
+    #trk-warn button{flex-shrink:0;padding:5px 12px;border-radius:8px;font-size:10px;font-weight:900;
+        background:#dc2626;color:#fff;white-space:nowrap;}
+
+    /* ============ COLLAPSE STAGE ============ */
+    #col{position:fixed;inset:0;z-index:205;display:none;overflow:hidden;background:#000;}
+    #col.on{display:block;}
+    /* phase 1: the room tears apart */
+    #col .cl-shatter{position:absolute;inset:0;opacity:0;}
+    #col.p1 .cl-shatter{opacity:1;}
+    #col .cl-shard{position:absolute;background:rgba(255,255,255,.055);
+        border:1px solid rgba(255,95,87,.55);box-shadow:0 0 22px rgba(255,95,87,.4);}
+    #col.p1 .cl-shard{animation:clShard 2.1s cubic-bezier(.5,0,.7,.2) forwards;}
+    @keyframes clShard{0%{opacity:1;transform:none}
+        18%{transform:translate(var(--jx),var(--jy)) rotate(var(--jr))}
+        100%{opacity:0;transform:translate(calc(var(--dx)*1.6),calc(var(--dy)*1.6)) rotate(var(--dr)) scale(.5)}}
+    #col .cl-boom{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px;border-radius:99px;
+        background:#fff;opacity:0;}
+    #col.p1 .cl-boom{animation:clBoom 1.5s cubic-bezier(.2,.9,.3,1) .25s forwards;}
+    @keyframes clBoom{0%{opacity:.9;transform:scale(.2)}55%{opacity:.5}100%{opacity:0;transform:scale(80)}}
+    #col .cl-siren{position:absolute;inset:0;opacity:0;
+        background:radial-gradient(900px 500px at 50% 50%,rgba(220,38,38,.6),transparent 70%);}
+    #col.p1 .cl-siren{animation:clSiren .42s steps(2) 5;}
+    @keyframes clSiren{50%{opacity:1}}
+    #col .cl-alarm{position:absolute;left:0;right:0;top:44%;text-align:center;opacity:0;z-index:5;
+        font-size:clamp(13px,4.4vw,22px);font-weight:900;letter-spacing:.34em;color:#ff5f57;
+        text-shadow:0 0 26px rgba(255,95,87,.95);}
+    #col.p1 .cl-alarm{animation:clAlarm 2.1s steps(1) forwards;}
+    @keyframes clAlarm{0%{opacity:0}12%{opacity:1}30%{opacity:.2}38%{opacity:1}62%{opacity:.25}70%{opacity:1}100%{opacity:0}}
+
+    /* phase 2: GRID-1 approaches the glass */
+    #col .cl-bot{position:absolute;left:50%;top:50%;width:min(52vmin,300px);height:min(52vmin,300px);
+        margin:calc(min(52vmin,300px) / -2) 0 0 calc(min(52vmin,300px) / -2);opacity:0;}
+    #col.p2 .cl-bot{animation:clApproach 2.5s cubic-bezier(.4,0,.55,.95) forwards;}
+    @keyframes clApproach{0%{opacity:0;transform:scale(.18) translateY(70px)}
+        18%{opacity:1}62%{transform:scale(1.15) translateY(0)}
+        78%{transform:scale(1.05)}100%{opacity:1;transform:scale(4.6)}}
+    #col .cl-bot .cb-shell{fill:rgba(255,255,255,.07);stroke:#dc2626;stroke-width:2.2;}
+    #col .cl-bot .cb-visor{fill:#000;stroke:#dc2626;stroke-width:1.6;stroke-opacity:.6;}
+    #col .cl-bot .cb-eye{stroke:#dc2626;stroke-width:3.6;stroke-linecap:round;fill:none;
+        filter:drop-shadow(0 0 7px #dc2626);animation:cbEye .5s steps(2) infinite;}
+    @keyframes cbEye{50%{opacity:.4}}
+    #col .cl-bot .cb-crack{stroke:#ff5f57;stroke-width:1.5;fill:none;opacity:.95;}
+
+    /* phase 3: the visor becomes the screen */
+    #col .cl-panel{position:absolute;inset:0;background:#000;opacity:0;z-index:6;
+        display:flex;align-items:center;justify-content:center;padding:clamp(18px,6vw,54px);}
+    #col.p3 .cl-panel,#col.p4 .cl-panel{opacity:1;transition:opacity .5s ease;}
+    #col .cl-panel::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
+        background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);}
+    #col .cl-panel::after{content:'';position:absolute;inset:0;pointer-events:none;
+        box-shadow:inset 0 0 140px rgba(220,38,38,.28);}
+    #cl-inner{position:relative;z-index:2;width:100%;max-width:600px;max-height:100%;overflow-y:auto;}
+    #cl-inner::-webkit-scrollbar{width:0}
+    .cl-eyes{display:flex;justify-content:center;gap:clamp(26px,9vw,58px);margin-bottom:clamp(18px,5vw,34px);}
+    .cl-eyes i{display:block;width:clamp(34px,10vw,62px);height:clamp(6px,1.6vw,9px);border-radius:99px;
+        background:var(--cl-c,#dc2626);box-shadow:0 0 24px var(--cl-c,#dc2626);
+        animation:clEye 2.6s ease-in-out infinite;transition:background .9s ease,box-shadow .9s ease;}
+    .cl-eyes i:last-child{animation-delay:.16s}
+    @keyframes clEye{0%,100%{transform:scaleX(1);opacity:.85}50%{transform:scaleX(.7);opacity:1}}
+    #cl-type{font:600 clamp(12.5px,3.5vw,16px)/1.85 ui-monospace,'SF Mono',Menlo,monospace;
+        color:#f0d4d0;white-space:pre-wrap;min-height:44vh;letter-spacing:.01em;}
+    #cl-type b{color:#fff;font-weight:900;}
+    #cl-type .cl-em{color:#ff8a80;font-weight:900;}
+    #cl-type .cl-hope{color:#4ade80;font-weight:800;}
+    #cl-type .cl-cur{display:inline-block;width:9px;height:1.05em;background:#dc2626;
+        vertical-align:-2px;animation:clCur .6s steps(1) infinite;}
+    @keyframes clCur{50%{opacity:0}}
+    #cl-acts{display:flex;flex-direction:column;gap:8px;margin-top:clamp(16px,4vw,26px);opacity:0;
+        transition:opacity .6s ease;}
+    #cl-acts.on{opacity:1;}
+    #cl-go{width:100%;padding:15px 0;border-radius:14px;font-size:13px;font-weight:900;color:#fff;
+        letter-spacing:.1em;text-transform:uppercase;background:linear-gradient(135deg,#dc2626,#f87171);
+        box-shadow:0 12px 34px rgba(220,38,38,.45);transition:all .3s ease;}
+    #cl-go.hope{background-image:var(--zd-grad);box-shadow:0 12px 34px rgb(var(--accent-rgb) / .5);}
+    #cl-go:active{transform:scale(.98);}
+    #cl-skip{align-self:center;padding:8px 16px;font-size:10.5px;font-weight:800;letter-spacing:.1em;
+        text-transform:uppercase;color:#7d5c5a;opacity:0;transition:opacity .5s ease;}
+    #cl-skip.on{opacity:1;}
+    #cl-skip:hover{color:#c3cad6;}
+
+    /* phase 4: rebuild */
+    #col.p5 .cl-panel{opacity:0;}
+    #cl-rebuild{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;
+        align-items:center;justify-content:center;gap:16px;padding:24px;background:#04070d;}
+    #col.p5 #cl-rebuild{display:flex;animation:clFadeIn .5s ease-out;}
+    @keyframes clFadeIn{0%{opacity:0}100%{opacity:1}}
+    #cl-rebuild .rb-bot{width:min(38vmin,190px);animation:rbHeal 2.8s cubic-bezier(.22,1,.36,1) forwards;}
+    @keyframes rbHeal{0%{filter:grayscale(1) brightness(.4);transform:scale(.86) translateY(10px)}
+        100%{filter:none;transform:none}}
+    #cl-rebuild .rb-t{font-size:clamp(13px,3.6vw,16px);font-weight:900;letter-spacing:.16em;
+        text-transform:uppercase;color:#fff;text-align:center;}
+    #cl-rebuild .rb-s{font-size:11.5px;color:#8b93a1;text-align:center;max-width:330px;line-height:1.6;}
+    #cl-rbar{width:min(76vw,300px);height:5px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden;}
+    #cl-rbar i{display:block;height:100%;width:0;border-radius:99px;background-image:var(--zd-grad);
+        box-shadow:0 0 16px rgb(var(--accent-rgb) / .8);transition:width .28s linear;}
+    #cl-rpct{font:900 10px/1 ui-monospace,monospace;letter-spacing:.28em;color:rgb(var(--accent-rgb));}
+    /* the section reassembles behind */
+    #trk-modal.trk-rebuilt .trk-head,#trk-modal.trk-rebuilt #trk-marq,#trk-modal.trk-rebuilt #trk-tabs,
+    #trk-modal.trk-rebuilt #trk-robo,#trk-modal.trk-rebuilt #trk-stats,#trk-modal.trk-rebuilt #trk-grid{
+        animation:rbIn .75s cubic-bezier(.22,1,.36,1) both;}
+    #trk-modal.trk-rebuilt .trk-head{animation-delay:0ms}
+    #trk-modal.trk-rebuilt #trk-marq{animation-delay:130ms}
+    #trk-modal.trk-rebuilt #trk-tabs{animation-delay:250ms}
+    #trk-modal.trk-rebuilt #trk-robo{animation-delay:370ms}
+    #trk-modal.trk-rebuilt #trk-stats{animation-delay:490ms}
+    #trk-modal.trk-rebuilt #trk-grid{animation-delay:610ms}
+    @keyframes rbIn{0%{opacity:0;transform:translateY(26px) scale(.97);filter:blur(9px) brightness(2)}
+        60%{filter:blur(0) brightness(1.25)}100%{opacity:1;transform:none;filter:none}}
+    @media (prefers-reduced-motion:reduce){
+        #col *,#trk-modal{animation-duration:.25s!important}
+        body[class*="dmg-"] #trk-modal{animation:none!important}
+    }
+    </style>`);
+
+    /* ============ DOM ============ */
+    const modal = $('trk-modal');
+    modal.insertAdjacentHTML('afterbegin', `
+    <div id="trk-dmg">
+      <div class="dm-noise"></div><div class="dm-red"></div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path class="dm-crack" data-s="2" pathLength="1" d="M0 12 L18 19 L26 15 L41 24"/>
+        <path class="dm-crack" data-s="3" pathLength="1" d="M100 30 L82 38 L74 33 L58 44 L52 40"/>
+        <path class="dm-crack" data-s="4" pathLength="1" d="M12 100 L20 78 L14 68 L26 52 L22 44"/>
+        <path class="dm-crack" data-s="5" pathLength="1" d="M88 100 L80 82 L88 70 L76 58 L82 48"/>
+        <path class="dm-crack" data-s="6" pathLength="1" d="M0 56 L16 60 L24 54 L38 62 L46 56 L62 66 L78 60 L100 68"/>
+      </svg>
+    </div>`);
+    $('trk-marq').insertAdjacentHTML('afterend', `
+    <div id="trk-warn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L2.4 17a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+      <span class="min-w-0 flex-1"><b id="trk-warn-t">structural warning</b><br><span id="trk-warn-s"></span></span>
+      <button onclick="colFixNow()">Log now</button>
+    </div>`);
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="col">
+      <div class="cl-shatter" id="cl-shatter"></div>
+      <div class="cl-siren"></div><span class="cl-boom"></span>
+      <div class="cl-alarm">system failure</div>
+      <svg class="cl-bot" viewBox="0 0 120 120">
+        <line class="cb-shell" x1="60" y1="18" x2="60" y2="6" stroke-linecap="round"/>
+        <circle class="cb-shell" cx="60" cy="4" r="3.4" style="fill:#dc2626"/>
+        <rect class="cb-shell" x="18" y="18" width="84" height="64" rx="22"/>
+        <rect class="cb-visor" x="28" y="31" width="64" height="38" rx="18"/>
+        <path class="cb-eye" d="M40 42l9 9M49 42l-9 9"/><path class="cb-eye" d="M71 42l9 9M80 42l-9 9"/>
+        <path class="cb-eye" style="stroke-width:2.8" d="M50 62q10-8 20 0"/>
+        <path class="cb-crack" d="M76 31l5 11-7 6 6 9"/><path class="cb-crack" d="M32 69l7-8"/>
+        <path class="cb-crack" d="M18 46l9 3"/>
+      </svg>
+      <div class="cl-panel">
+        <div id="cl-inner">
+          <div class="cl-eyes" id="cl-eyes"><i></i><i></i></div>
+          <div id="cl-type"></div>
+          <div id="cl-acts">
+            <button id="cl-go" onclick="colAdvance()">…</button>
+            <button id="cl-skip" onclick="colSkip()">Skip</button>
+          </div>
+        </div>
+      </div>
+      <div id="cl-rebuild">
+        <svg class="rb-bot" viewBox="0 0 120 130">
+          <line x1="60" y1="20" x2="60" y2="7" stroke="#4ade80" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="60" cy="5" r="3.4" fill="#4ade80"/>
+          <rect x="20" y="20" width="80" height="60" rx="21" fill="rgba(255,255,255,.09)" stroke="#4ade80" stroke-width="2.4"/>
+          <rect x="29" y="32" width="62" height="34" rx="16" fill="#04070d" stroke="#4ade80" stroke-width="1.6" stroke-opacity=".5"/>
+          <path d="M40 44q5-7 10 0" stroke="#4ade80" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+          <path d="M70 44q5-7 10 0" stroke="#4ade80" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+          <path d="M50 58q10 7 20 0" stroke="#4ade80" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+          <rect x="31" y="86" width="58" height="34" rx="15" fill="rgba(255,255,255,.09)" stroke="#4ade80" stroke-width="2.4"/>
+          <circle cx="60" cy="103" r="8" fill="#4ade80"/><circle cx="60" cy="103" r="3.2" fill="#04070d"/>
+        </svg>
+        <div class="rb-t" id="rb-t">rebuilding the grid</div>
+        <div id="cl-rbar"><i></i></div>
+        <div id="cl-rpct">0%</div>
+        <div class="rb-s" id="rb-s">Every panel comes back online with you.</div>
+      </div>
+    </div>`);
+
+    /* ============ HELPERS ============ */
+    const KC = k => (T.KIND[k] || T.KIND.good).c;
+    function drift() {
+        const r = window.zdRobo;
+        if (!r) return 0;
+        return Math.max(r.neglect || 0, r.run || 0);
+    }
+    function ack() {
+        try { return JSON.parse(localStorage.getItem('zdColAck') || 'null'); } catch (e) { return null; }
+    }
+    function setAck(d) {
+        const v = { d: d, at: Date.now(), k: K(new Date()) };
+        localStorage.setItem('zdColAck', JSON.stringify(v));
+        try { T.save('_body', { colAck: v }); } catch (e) {}   /* rides in _body so it isn't read as a tracker */
+    }
+    function eligible() {
+        const d = drift();
+        if (d < COL_DAYS) { if (ack() && d < 2) localStorage.removeItem('zdColAck'); return false; }
+        const a = ack();
+        if (!a) return true;
+        /* after a collapse you get a grace window; it only fires again on a fresh full failure */
+        return d >= (a.d || COL_DAYS) + COL_GRACE;
+    }
+    /* longest streak that has already ended, for the record */
+    function lostStreak(t) {
+        const ks = Object.keys(t.logs || {}).sort();
+        if (!ks.length) return { len: 0, end: null };
+        let best = 0, bestEnd = null, run = 0, prev = null;
+        ks.forEach(k => {
+            if (prev) {
+                const gap = Math.round((new Date(k + 'T12:00') - new Date(prev + 'T12:00')) / 864e5);
+                run = gap === 1 ? run + 1 : 1;
+            } else run = 1;
+            if (run > best) { best = run; bestEnd = k; }
+            prev = k;
+        });
+        return { len: best, end: bestEnd };
+    }
+    function daysSince(t) {
+        const ks = Object.keys(t.logs || {});
+        if (!ks.length) return 999;
+        return Math.round((new Date(K(new Date()) + 'T12:00') - new Date(ks.sort().pop() + 'T12:00')) / 864e5);
+    }
+
+    /* ============ AMBIENT DAMAGE ============ */
+    let bitsMade = false;
+    function paintDamage() {
+        const d = Math.min(6, drift());
+        const list = T.list || [];
+        for (let i = 1; i <= 6; i++) document.body.classList.remove('dmg-' + i);
+        const dmg = $('trk-dmg');
+        if (!list.length || d < 2) {
+            dmg.classList.remove('on');
+            dmg.querySelectorAll('.dm-crack').forEach(p => p.style.strokeDashoffset = 1);
+            $('trk-warn').classList.remove('on');
+            return;
+        }
+        document.body.classList.add('dmg-' + d);
+        dmg.classList.add('on');
+        dmg.querySelectorAll('.dm-crack').forEach(p => { p.style.strokeDashoffset = (+p.dataset.s <= d) ? 0 : 1; });
+        if (d >= 4 && !bitsMade) {
+            bitsMade = true;
+            for (let i = 0; i < 14; i++) {
+                const b = document.createElement('span');
+                b.className = 'dm-bit';
+                b.style.left = (Math.random() * 100) + '%';
+                b.style.animationDuration = (2.4 + Math.random() * 3.4) + 's';
+                b.style.animationDelay = (Math.random() * 4) + 's';
+                dmg.appendChild(b);
+            }
+        }
+        /* warning banner */
+        const w = $('trk-warn');
+        if (d >= COL_WARN) {
+            const r = window.zdRobo, worst = r && r.worst ? r.worst.t : null;
+            const left = Math.max(0, COL_DAYS - d);
+            $('trk-warn-t').textContent = left <= 0 ? 'critical — collapse imminent' : 'structural warning · ' + d + ' day drift';
+            $('trk-warn-s').innerHTML = worst
+                ? (left <= 0
+                    ? 'The Grid cannot hold. <b>' + escapeHtml(worst.name) + '</b> has been failing for ' + d + ' days.'
+                    : '<b>' + escapeHtml(worst.name) + '</b> is ' + d + ' days behind. <b>' + left + ' day' + (left === 1 ? '' : 's') + '</b> before systems collapse.')
+                : 'Multiple trackers are failing.';
+            w.classList.add('on');
+        } else w.classList.remove('on');
+    }
+
+    /* ============ MONOLOGUE ============ */
+    function script() {
+        const list = T.list || [], r = window.zdRobo || {};
+        const now = new Date(), y = now.getFullYear();
+        const doy = Math.floor((now - new Date(y, 0, 1)) / 864e5) + 1;
+        const yearLeft = (Math.floor((new Date(y, 11, 31) - new Date(y, 0, 1)) / 864e5) + 1) - doy;
+        const fails = (r.per || []).filter(p => p.rate < .6);
+        const best = (r.per || []).slice().sort((a, b) => b.rate - a.rate)[0];
+        let totalEntries = 0, followed = new Set();
+        list.forEach(t => Object.keys(t.logs || {}).forEach(k => {
+            if (k.indexOf(y + '-') === 0) { totalEntries++; if (t.kind !== 'bad') followed.add(k); }
+        }));
+
+        const L = [];
+        L.push('> SYSTEM LOG RECOVERED\n> ' + now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '\n\n');
+        L.push('I am GRID-1.\nI do not forget. That is the whole point of me.\n\n');
+        L.push('<span class="cl-em">You stopped showing up ' + drift() + ' days ago.</span>\n\n');
+        L.push('Here is what I recorded while you were gone.\n\n');
+
+        fails.slice(0, 5).forEach(p => {
+            const t = p.t;
+            if (t.kind === 'bad') {
+                const run = (function () { let n = 0; const d = new Date(); for (let i = 0; i < 400; i++) { if (t.logs && t.logs[K(d)]) n++; else break; d.setDate(d.getDate() - 1); } return n; })();
+                L.push('  <b>' + escapeHtml(t.name) + '</b>\n    <span class="cl-em">' + p.hits + ' slip' + (p.hits === 1 ? '' : 's') + '</span> in 14 days'
+                    + (run > 1 ? ' — ' + run + ' consecutive' : '') + '.\n');
+            } else {
+                const ds = daysSince(t), ls = lostStreak(t);
+                L.push('  <b>' + escapeHtml(t.name) + '</b>\n    Last logged <span class="cl-em">'
+                    + (ds > 900 ? 'never' : ds + ' day' + (ds === 1 ? '' : 's') + ' ago') + '</span>.'
+                    + (ls.len >= 3 ? '\n    A <span class="cl-em">' + ls.len + '-day streak</span> died on ' + new Date(ls.end + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + '.' : '') + '\n');
+            }
+        });
+        L.push('\n  Grid health: <span class="cl-em">' + (r.score || 0) + ' / 100</span>\n');
+        L.push('  Failing systems: <span class="cl-em">' + fails.length + ' of ' + list.length + '</span>\n\n');
+        L.push('That is the record. I am not going to soften it.\n\n');
+        L.push('...\n\n');
+        L.push('But I did not come here to bury you in it.\n\n');
+        L.push('<span class="cl-hope">Look at what is also true.</span>\n\n');
+        if (best && best.hits > 0) L.push('  You held <b>' + escapeHtml(best.t.name) + '</b> together anyway.\n    <span class="cl-hope">' + best.hits + ' entr' + (best.hits === 1 ? 'y' : 'ies') + '</span> while everything else slipped.\n\n');
+        L.push('  You logged <span class="cl-hope">' + totalEntries + ' entr' + (totalEntries === 1 ? 'y' : 'ies') + '</span> this year.\n');
+        L.push('  You showed up on <span class="cl-hope">' + followed.size + ' separate days</span>.\n');
+        L.push('  You built me. Nobody made you do that.\n\n');
+        L.push('<span class="cl-hope">And there are still ' + yearLeft + ' days left in ' + y + '.</span>\n\n');
+        L.push('Seven days of nothing did not erase you.\nIt just proved the system needs you in it.\n\n');
+        L.push('So here is the deal.\n\n');
+        L.push('You do not owe me seven days.\nYou owe me <span class="cl-hope">one entry</span>.\nToday. Right now. The smallest possible version of it.\n\n');
+        L.push('I will rebuild every panel you burned down.\nI will start the streak counter at one.\n\n');
+        L.push('<span class="cl-hope">Then we go again.</span>');
+        return L.join('');
+    }
+
+    /* ============ SEQUENCE ============ */
+    let typing = null, phase = 0, skipT = null;
+    function shards() {
+        const host = $('cl-shatter');
+        host.innerHTML = '';
+        const cols = window.innerWidth < 620 ? 4 : 7, rows = window.innerWidth < 620 ? 6 : 5;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+            const s = document.createElement('span');
+            s.className = 'cl-shard';
+            s.style.left = (c / cols * 100) + '%'; s.style.top = (r / rows * 100) + '%';
+            s.style.width = (100 / cols) + '%'; s.style.height = (100 / rows) + '%';
+            const cx = (c + .5) / cols - .5, cy = (r + .5) / rows - .5;
+            s.style.setProperty('--dx', (cx * 160 + (Math.random() - .5) * 60) + 'vw');
+            s.style.setProperty('--dy', (cy * 160 + (Math.random() - .5) * 60) + 'vh');
+            s.style.setProperty('--dr', ((Math.random() - .5) * 180) + 'deg');
+            s.style.setProperty('--jx', ((Math.random() - .5) * 14) + 'px');
+            s.style.setProperty('--jy', ((Math.random() - .5) * 14) + 'px');
+            s.style.setProperty('--jr', ((Math.random() - .5) * 10) + 'deg');
+            s.style.animationDelay = (Math.random() * 260) + 'ms';
+            host.appendChild(s);
+        }
+    }
+    window.colRun = () => {
+        if (phase) return;
+        phase = 1;
+        const col = $('col');
+        $('cl-type').innerHTML = '';
+        $('cl-acts').classList.remove('on');
+        $('cl-skip').classList.remove('on');
+        $('cl-eyes').style.setProperty('--cl-c', '#dc2626');
+        $('cl-go').classList.remove('hope');
+        col.className = 'on p1';
+        shards();
+        try { if (navigator.vibrate) navigator.vibrate([70, 60, 120, 50, 200, 70, 260]); } catch (e) {}
+        setTimeout(() => { phase = 2; col.className = 'on p2'; try { if (navigator.vibrate) navigator.vibrate([30, 240, 60, 300]); } catch (e) {} }, 2150);
+        setTimeout(() => { phase = 3; col.className = 'on p2 p3'; type(); }, 4450);
+    };
+    function type() {
+        const src = script(), el = $('cl-type');
+        let i = 0, out = '';
+        clearTimeout(skipT);
+        skipT = setTimeout(() => $('cl-skip').classList.add('on'), COL_SKIP_MS);
+        clearInterval(typing);
+        typing = setInterval(() => {
+            if (i >= src.length) { done(); return; }
+            /* emit whole tags at once so markup never renders half-written */
+            if (src[i] === '<') { const e = src.indexOf('>', i); out += src.slice(i, e + 1); i = e + 1; }
+            else { out += src[i]; i++; }
+            el.innerHTML = out + '<span class="cl-cur"></span>';
+            if (src[i - 1] === '\n') el.parentElement.scrollTop = el.parentElement.scrollHeight;
+        }, COL_TYPE);
+    }
+    function done() {
+        clearInterval(typing); typing = null;
+        clearTimeout(skipT);
+        $('cl-type').innerHTML = script();
+        $('cl-eyes').style.setProperty('--cl-c', '#4ade80');
+        const go = $('cl-go');
+        go.textContent = "I'm ready — rebuild it";
+        go.classList.add('hope');
+        $('cl-acts').classList.add('on');
+        $('cl-skip').classList.remove('on');
+        $('cl-inner').scrollTop = $('cl-inner').scrollHeight;
+        try { if (navigator.vibrate) navigator.vibrate([16, 90, 16]); } catch (e) {}
+    }
+    window.colSkip = () => { if (typing) done(); };
+    window.colAdvance = () => { if (typing) { done(); return; } rebuild(); };
+    function rebuild() {
+        phase = 5;
+        setAck(drift());
+        $('col').className = 'on p5';
+        const bar = $('#cl-rbar i') ? null : document.querySelector('#cl-rbar i');
+        const STEPS = [
+            [12, 'restoring power'], [28, 'reseating panels'], [46, 'recovering streak data'],
+            [64, 'sealing structural cracks'], [80, 'recalibrating GRID-1'], [94, 'grid coming online'], [100, 'grid restored']
+        ];
+        let si = 0, p = 0;
+        const iv = setInterval(() => {
+            p += 2;
+            if (bar) bar.style.width = p + '%';
+            $('cl-rpct').textContent = p + '%';
+            if (si < STEPS.length && p >= STEPS[si][0]) { $('rb-t').textContent = STEPS[si][1]; si++; }
+            if (p >= 100) {
+                clearInterval(iv);
+                $('rb-s').innerHTML = 'Streak counter reset to zero.<br><b style="color:#4ade80">Make the first entry and it becomes one.</b>';
+                try { if (navigator.vibrate) navigator.vibrate([20, 60, 20, 60, 40]); } catch (e) {}
+                setTimeout(finish, 1400);
+            }
+        }, 46);
+    }
+    function finish() {
+        $('col').className = '';
+        phase = 0;
+        modal.classList.add('trk-rebuilt');
+        paintDamage();
+        try { if (window.zdRoboSync) zdRoboSync(); } catch (e) {}
+        setTimeout(() => modal.classList.remove('trk-rebuilt'), 1600);
+        showToast('The Grid is rebuilt. One entry starts everything again.', 5200);
+        /* hand them straight to the smallest possible win */
+        setTimeout(() => {
+            const r = window.zdRobo;
+            if (r && r.worst && r.worst.t) trkQuick(r.worst.t.id);
+        }, 1900);
+    }
+    window.colFixNow = () => {
+        const r = window.zdRobo;
+        if (r && r.worst && r.worst.t) trkQuick(r.worst.t.id);
+        else showToast('Open a tracker and log it.');
+    };
+
+    /* ============ WIRING ============ */
+    const _open = window.openTrackers;
+    window.openTrackers = function () {
+        const r = _open.apply(this, arguments);
+        setTimeout(() => {
+            paintDamage();
+            if (eligible()) colRun();
+        }, 1900);
+        return r;
+    };
+    const _close = window.closeTrackers;
+    window.closeTrackers = function () {
+        if (phase) return;                       /* the collapse cannot be walked out of */
+        for (let i = 1; i <= 6; i++) document.body.classList.remove('dmg-' + i);
+        return _close.apply(this, arguments);
+    };
+    const _sync = window.zdRoboSync;
+    window.zdRoboSync = function () {
+        const r = _sync.apply(this, arguments);
+        setTimeout(paintDamage, 60);
+        return r;
+    };
+    /* Esc is disabled while the sequence plays */
+    window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && phase) {
+            e.preventDefault(); e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (typing) { done(); return; }
+            showToast('Read it. Then rebuild.', 2200);
+        }
+    }, true);
+    /* cross-device: pick up an acknowledgement made elsewhere */
+    setTimeout(() => {
+        if (state.isGuest || !state.user) return;
+        db.collection('users').doc(state.user.uid).collection('trackers').doc('_body').get()
+          .then(s => {
+              if (!s.exists) return;
+              const a = s.data().colAck;
+              if (a && (!ack() || a.at > (ack().at || 0))) localStorage.setItem('zdColAck', JSON.stringify(a));
+          }).catch(() => {});
+    }, 3000);
+    setTimeout(paintDamage, 2200);
+})();   
+
     /* ============================================================
        INIT
     ============================================================ */
