@@ -16954,71 +16954,45 @@ window.zdScrollToNode = function (node) {
     #fx.on{display:block;}
     #fx .fx-l{position:absolute;inset:0;}
 
-               /* ============ THEME SWITCH — scan dissolve & magical reveal ============ */
-    #crt{position:fixed;inset:0;z-index:199;display:none;overflow:hidden;pointer-events:none;}
+               /* ============ THEME SWITCH — circular reveal from the tap point ============ */
+    /* Path A — View Transitions API (Chrome/Edge): a true snapshot crossfade.
+       The old theme holds still while the new one irises open over it. */
+    ::view-transition-group(root){animation-duration:${CRT_MS}ms;}
+    ::view-transition-old(root),::view-transition-new(root){
+        animation:none;mix-blend-mode:normal;backface-visibility:hidden;}
+    ::view-transition-old(root){z-index:1;}
+    ::view-transition-new(root){z-index:9999;
+        animation:crIris ${CRT_MS}ms cubic-bezier(.05,.7,.1,1) both;}
+    @keyframes crIris{
+        from{clip-path:circle(0% at var(--cr-x,50%) var(--cr-y,50%))}
+        to  {clip-path:circle(var(--cr-r,150%) at var(--cr-x,50%) var(--cr-y,50%))}}
+
+    /* Path B — fallback: two flat layers, GPU-clipped. The new theme's colour
+       irises over the old one from the same point, then both dissolve away
+       against the real UI that already sits beneath them. */
+    #crt{position:fixed;inset:0;z-index:199;display:none;pointer-events:none;
+        contain:strict;isolation:isolate;}
     #crt.on{display:block;}
-
-    /* the veil holds the OUTGOING theme. It climbs up to cover, holds while the
-       theme flips underneath, then peels down to reveal the new one. */
-    #crt .cr-veil{position:absolute;inset:0;background:var(--cr-from,#141414);
+    #crt .cr-old{position:absolute;inset:0;background:var(--cr-from,#141414);}
+    #crt .cr-new{position:absolute;inset:0;background:var(--cr-to,#f4efe6);
         will-change:clip-path;
-        -webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0);}
-    #crt.on .cr-veil{animation:crtVeil ${CRT_MS}ms cubic-bezier(.62,.02,.34,1) forwards;}
-    @keyframes crtVeil{
-        0%  {-webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0)}
-        38% {-webkit-clip-path:inset(0 0 0 0);clip-path:inset(0 0 0 0)}
-        50% {-webkit-clip-path:inset(0 0 0 0);clip-path:inset(0 0 0 0)}
-        100%{-webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0)}}
-    /* faint scanline texture so the veil reads as a display, not a colour block */
-    #crt .cr-veil::after{content:'';position:absolute;inset:0;opacity:.22;
-        background:repeating-linear-gradient(0deg,rgba(128,128,128,.4) 0 1px,transparent 1px 3px);}
+        clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%));
+        -webkit-clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%));}
+    #crt.on .cr-new{animation:crWipe ${CRT_MS}ms cubic-bezier(.05,.7,.1,1) forwards;}
+    @keyframes crWipe{
+        from{clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%));
+             -webkit-clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%))}
+        to  {clip-path:circle(var(--cr-rad,140vmax) at var(--cr-px,50%) var(--cr-py,50%));
+             -webkit-clip-path:circle(var(--cr-rad,140vmax) at var(--cr-px,50%) var(--cr-py,50%))}}
+    /* the flat layers hand off to the real interface — 140ms, imperceptible */
+    #crt.on .cr-old,#crt.on .cr-new{animation-fill-mode:forwards;}
+    #crt.settle{transition:opacity 140ms linear;opacity:0;}
 
-    /* upward beam — dissolves the old theme */
-    #crt .cr-up{position:absolute;left:-8%;right:-8%;height:clamp(90px,16vh,190px);opacity:0;
-        will-change:transform,opacity;
-        background:linear-gradient(0deg,transparent,rgb(var(--accent-rgb) / .18) 34%,
-            rgb(var(--accent-rgb) / .5) 50%,rgba(255,255,255,.72) 54%,
-            rgb(var(--accent-rgb) / .3) 62%,transparent);
-        filter:blur(1px);}
-    #crt.on .cr-up{animation:crtUp ${CRT_MS}ms cubic-bezier(.62,.02,.34,1) forwards;}
-    @keyframes crtUp{0%{top:100%;opacity:0}
-        8%{opacity:1}30%{opacity:1}42%{top:-18%;opacity:0}100%{top:-18%;opacity:0}}
-
-    /* downward beam — the reveal edge */
-    #crt .cr-dn{position:absolute;left:-8%;right:-8%;height:clamp(110px,20vh,240px);opacity:0;
-        will-change:transform,opacity;
-        background:linear-gradient(180deg,transparent,rgb(var(--accent-rgb) / .14) 30%,
-            rgb(var(--accent-rgb) / .46) 46%,rgba(255,255,255,.85) 51%,
-            rgb(var(--accent-rgb) / .46) 56%,rgb(var(--accent-rgb) / .1) 72%,transparent);
-        filter:blur(.5px);}
-    #crt.on .cr-dn{animation:crtDn ${CRT_MS}ms cubic-bezier(.5,0,.28,1) forwards;}
-    @keyframes crtDn{0%,46%{top:-22%;opacity:0}
-        54%{opacity:1}92%{opacity:1}100%{top:104%;opacity:0}}
-    /* razor line riding the reveal edge */
-    #crt .cr-edge{position:absolute;left:0;right:0;height:2px;opacity:0;background:#fff;
-        box-shadow:0 0 26px 6px rgb(var(--accent-rgb) / .8),0 0 60px 14px rgb(var(--accent-rgb) / .35);}
-    #crt.on .cr-edge{animation:crtEdge ${CRT_MS}ms cubic-bezier(.5,0,.28,1) forwards;}
-    @keyframes crtEdge{0%,48%{top:-2%;opacity:0}
-        56%{opacity:1}90%{opacity:.9}100%{top:101%;opacity:0}}
-
-    /* sparkles that twinkle as the reveal edge passes them */
-    #crt .cr-sp{position:absolute;width:3px;height:3px;border-radius:99px;opacity:0;
-        background:#fff;box-shadow:0 0 8px 2px rgb(var(--accent-rgb) / .9);}
-    #crt.on .cr-sp{animation:crtSp 720ms cubic-bezier(.22,1,.36,1) both;}
-    @keyframes crtSp{0%{opacity:0;transform:scale(0) rotate(0)}
-        28%{opacity:1;transform:scale(1.9) rotate(45deg)}
-        60%{opacity:.8;transform:scale(1) rotate(90deg)}
-        100%{opacity:0;transform:scale(0) rotate(140deg) translateY(-14px)}}
-
-    /* soft haze in the NEW theme colour — the magical settle after the reveal */
-    #crt .cr-haze{position:absolute;inset:0;opacity:0;background:var(--cr-to,#f4efe6);}
-    #crt.on .cr-haze{animation:crtHaze ${CRT_MS}ms ease-out forwards;}
-    @keyframes crtHaze{0%,52%{opacity:0}66%{opacity:.34}100%{opacity:0}}
-
-    /* one gentle bloom at the moment of the flip */
-    #crt .cr-flash{position:absolute;inset:0;opacity:0;background:#fff;}
-    #crt.on .cr-flash{animation:crtFlash ${CRT_MS}ms ease-out forwards;}
-    @keyframes crtFlash{0%,40%{opacity:0}46%{opacity:.5}56%{opacity:.14}100%{opacity:0}}
+    @media (prefers-reduced-motion:reduce){
+        ::view-transition-group(root){animation-duration:1ms;}
+        ::view-transition-new(root){animation-duration:1ms;}
+        #crt{display:none!important;}
+    }
 
     /* ============ 1. HOME — iris bloom ============ */
     .fx-iris{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:99px;
@@ -17131,15 +17105,7 @@ window.zdScrollToNode = function (node) {
 
     document.body.insertAdjacentHTML('beforeend', `
     <div id="fx"><div class="fx-l" id="fx-l"></div></div>
-    <div id="crt">
-      <div class="cr-veil"></div>
-      <div class="cr-haze"></div>
-      <div class="cr-up"></div>
-      <div class="cr-dn"></div>
-      <div class="cr-edge"></div>
-      <div class="cr-flash"></div>
-      <div id="cr-sparks"></div>
-    </div>`);
+    <div id="crt"><div class="cr-old"></div><div class="cr-new"></div></div>`);
 
     const $ = id => document.getElementById(id);
     const L = $('fx-l'), FX = $('fx');
@@ -17301,53 +17267,90 @@ window.zdScrollToNode = function (node) {
 //         });
 //     }, 900);
 // })();    
-         /* ============ THEME SWITCH — scan dissolve & magical reveal ============ */
-    function crtBuild(from, to) {
-        const crt = $('crt');
-        crt.style.setProperty('--cr-from', from);
-        crt.style.setProperty('--cr-to', to);
-        /* sparkles fire in step with the reveal edge as it passes their height */
-        const N = window.innerWidth < 620 ? 16 : 30;
-        const revealStart = CRT_MS * 0.52, revealSpan = CRT_MS * 0.46;
-        let h = '';
-        for (let i = 0; i < N; i++) {
-            const y = Math.random() * 100;
-            const s = 2 + Math.random() * 3;
-            h += `<span class="cr-sp" style="left:${(Math.random() * 100).toFixed(2)}%;top:${y.toFixed(2)}%;
-                width:${s.toFixed(1)}px;height:${s.toFixed(1)}px;
-                animation-delay:${Math.round(revealStart + y / 100 * revealSpan - 90)}ms"></span>`;
-        }
-        $('cr-sparks').innerHTML = h;
+         /* ============ THEME SWITCH — circular reveal ============ */
+    /* Remember where the user last touched, so the reveal grows from there. */
+    let cx = null, cy = null;
+    ['pointerdown', 'click'].forEach(ev => window.addEventListener(ev, e => {
+        if (typeof e.clientX === 'number' && (e.clientX || e.clientY)) { cx = e.clientX; cy = e.clientY; }
+    }, true));
+
+    function origin() {
+        const w = window.innerWidth, h = window.innerHeight;
+        const x = (cx == null ? w - 40 : cx), y = (cy == null ? 44 : cy);
+        /* radius must reach the farthest corner, or the wipe leaves a gap */
+        const r = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
+        return { x: x, y: y, r: Math.ceil(r) + 2 };
     }
+
     const _tt = window.toggleTheme;
     if (typeof _tt === 'function') {
         window.toggleTheme = function () {
-            if (busy) return _tt.apply(this, arguments);
-            busy = true;
+            if (busy) return;
+            const reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+            if (reduce) return _tt.apply(this, arguments);
+
+            const o = origin();
             const wasDark = document.documentElement.classList.contains('dark');
-            crtBuild(wasDark ? '#141414' : '#f4efe6', wasDark ? '#f4efe6' : '#141414');
+            const self = this, args = arguments;
+
+            /* ---- Path A: real snapshot crossfade ---- */
+            if (document.startViewTransition) {
+                const r = document.documentElement.style;
+                r.setProperty('--cr-x', o.x + 'px');
+                r.setProperty('--cr-y', o.y + 'px');
+                r.setProperty('--cr-r', o.r + 'px');
+                busy = true;
+                let t;
+                try { t = document.startViewTransition(() => { _tt.apply(self, args); }); }
+                catch (e) { busy = false; return _tt.apply(self, args); }
+                t.finished.finally(() => {
+                    r.removeProperty('--cr-x'); r.removeProperty('--cr-y'); r.removeProperty('--cr-r');
+                    busy = false;
+                });
+                return;
+            }
+
+            /* ---- Path B: flat-colour iris ---- */
+            busy = true;
             const crt = $('crt');
             crt.className = '';
-            void crt.offsetWidth;          /* restart the animations cleanly */
+            crt.style.opacity = '';
+            crt.style.setProperty('--cr-from', wasDark ? '#141414' : '#f4efe6');
+            crt.style.setProperty('--cr-to',   wasDark ? '#f4efe6' : '#141414');
+            crt.style.setProperty('--cr-px', o.x + 'px');
+            crt.style.setProperty('--cr-py', o.y + 'px');
+            crt.style.setProperty('--cr-rad', o.r + 'px');
+            void crt.offsetWidth;
             crt.className = 'on';
-            try { if (navigator.vibrate) navigator.vibrate([10, 120, 18]); } catch (e) {}
-            /* flip the real theme while the veil covers everything */
-            setTimeout(() => { _tt.call(this); }, Math.round(CRT_MS * 0.44));
-            setTimeout(() => { crt.className = ''; $('cr-sparks').innerHTML = ''; busy = false; }, CRT_MS + 80);
+            /* flip beneath the cover, one frame in, so no flicker escapes */
+            requestAnimationFrame(() => requestAnimationFrame(() => { _tt.apply(self, args); }));
+            setTimeout(() => { crt.classList.add('settle'); }, CRT_MS - 40);
+            setTimeout(() => { crt.className = ''; crt.style.opacity = ''; busy = false; }, CRT_MS + 180);
         };
     }
+
     setTimeout(() => {
         ['theme-btn', 'm-theme-btn'].forEach(id => {
             const b = document.getElementById(id);
             if (!b) return;
             b.removeAttribute('onclick');
-            b.addEventListener('click', e => { e.preventDefault(); toggleTheme(); });
+            b.addEventListener('click', e => {
+                e.preventDefault();
+                const r = b.getBoundingClientRect();
+                cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+                toggleTheme();
+            });
         });
         document.querySelectorAll('#more-menu button, #mobile-menu-dropdown button').forEach(b => {
-            if (/light\s*\/\s*dark/i.test(b.textContent)) {
-                b.removeAttribute('onclick');
-                b.addEventListener('click', () => { toggleTheme(); try { toggleMoreMenu(); } catch (e) {} try { toggleMobileMenu(); } catch (e) {} });
-            }
+            if (!/light\s*\/\s*dark/i.test(b.textContent)) return;
+            b.removeAttribute('onclick');
+            b.addEventListener('click', () => {
+                const r = b.getBoundingClientRect();
+                cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+                toggleTheme();
+                try { toggleMoreMenu(); } catch (e) {}
+                try { toggleMobileMenu(); } catch (e) {}
+            });
         });
     }, 900);
 })();
