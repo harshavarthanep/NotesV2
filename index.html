@@ -6630,7 +6630,7 @@
             //     const target = secs[idx].lvl === 0 ? document.querySelector('.ql-editor').firstElementChild : heads[secs.filter((s, j) => j < idx && s.lvl > 0).length];
             //     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     b.onclick = () => { zdScrollToNode(line.domNode); };
-            };
+            // };
         });
     }
     quill.on('text-change', () => { clearTimeout(_dtT); _dtT = setTimeout(renderDeepThink, 800); });
