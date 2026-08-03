@@ -16954,51 +16954,52 @@ window.zdScrollToNode = function (node) {
     #fx.on{display:block;}
     #fx .fx-l{position:absolute;inset:0;}
 
-        /* ============ CRT / LIGHT-DARK — scanline glitch wipe ============ */
-    #crt{position:fixed;inset:0;z-index:199;display:none;overflow:hidden;pointer-events:none;
-        background:var(--cr-from,#141414);}
-    #crt.on{display:block;animation:crtBox ${CRT_MS}ms steps(1) forwards;}
-    @keyframes crtBox{0%{opacity:0}4%{opacity:1}94%{opacity:1}100%{opacity:0}}
-    /* the incoming theme, revealed line by line */
-    #crt .cr-lines{position:absolute;inset:0;}
-    #crt .cr-ln{position:absolute;left:-6%;right:-6%;background:var(--cr-to,#f4efe6);
-        transform:scaleX(0);transform-origin:var(--o,left);opacity:0;}
-    #crt.on .cr-ln{animation:crtLn ${CRT_MS}ms cubic-bezier(.4,0,.25,1) both;}
-    @keyframes crtLn{0%{transform:scaleX(0);opacity:0}
-        14%{transform:scaleX(.28);opacity:1}
-        26%{transform:scaleX(.14);opacity:1}
-        44%{transform:scaleX(.72);opacity:1}
-        56%{transform:scaleX(.55);opacity:1}
-        78%{transform:scaleX(1);opacity:1}
-        100%{transform:scaleX(1);opacity:1}}
-    /* hard black/white tear bands */
-    #crt .cr-tear{position:absolute;left:-10%;right:-10%;background:#fff;mix-blend-mode:difference;opacity:0;}
-    #crt.on .cr-tear{animation:crtTear ${CRT_MS}ms steps(1) both;}
-    @keyframes crtTear{0%,100%{opacity:0}
-        8%{opacity:1;transform:translateX(-3vw)}12%{opacity:0}
-        22%{opacity:1;transform:translateX(4vw)}26%{opacity:0}
-        38%{opacity:1;transform:translateX(-6vw)}42%{opacity:0}
-        58%{opacity:1;transform:translateX(3vw)}62%{opacity:0}
-        76%{opacity:.7;transform:translateX(-2vw)}80%{opacity:0}}
-    /* fine scanline texture over everything */
-    #crt .cr-scan{position:absolute;inset:0;opacity:.42;mix-blend-mode:overlay;
-        background:repeating-linear-gradient(0deg,rgba(0,0,0,.55) 0 1px,transparent 1px 3px);}
-    #crt.on .cr-scan{animation:crtScan ${CRT_MS}ms steps(1) both;}
-    @keyframes crtScan{0%{opacity:.5}60%{opacity:.34}100%{opacity:0}}
-    /* whole-screen flicker */
-    #crt.on{animation:crtBox ${CRT_MS}ms steps(1) forwards,crtFlick ${CRT_MS}ms steps(1) forwards;}
-    @keyframes crtFlick{0%,100%{filter:none}
-        6%{filter:brightness(2.6) contrast(2.4) grayscale(1)}9%{filter:none}
-        18%{filter:brightness(.15) grayscale(1)}21%{filter:none}
-        33%{filter:brightness(2.2) contrast(2) grayscale(1)}36%{filter:none}
-        48%{filter:brightness(.3) grayscale(1)}51%{filter:none}
-        66%{filter:brightness(1.7) contrast(1.5) grayscale(.6)}69%{filter:none}
-        84%{filter:brightness(1.2)}87%{filter:none}}
-    /* rolling sync bar */
-    #crt .cr-roll{position:absolute;left:0;right:0;height:34px;opacity:0;mix-blend-mode:overlay;
-        background:linear-gradient(180deg,transparent,rgba(255,255,255,.9),transparent);}
-    #crt.on .cr-roll{animation:crtRoll ${CRT_MS}ms linear both;}
-    @keyframes crtRoll{0%{top:-12%;opacity:0}10%{opacity:.85}88%{opacity:.6}100%{top:108%;opacity:0}}
+       /* ============ CRT / LIGHT-DARK ============ */
+    #crt{position:fixed;inset:0;z-index:199;display:none;overflow:hidden;pointer-events:none;background:#000;}
+    #crt.on{display:block;animation:crtBox ${CRT_MS}ms cubic-bezier(.3,0,.2,1) forwards;}
+    @keyframes crtBox{0%{opacity:0}6%{opacity:1}86%{opacity:1}100%{opacity:0}}
+    #crt .cr-img{position:absolute;inset:0;background:var(--cr-bg,#111);}
+    #crt.on .cr-img{animation:crtCollapse ${CRT_MS}ms cubic-bezier(.7,0,.3,1) forwards;}
+    @keyframes crtCollapse{
+        0%{transform:scaleY(1) scaleX(1);filter:brightness(1)}
+        22%{transform:scaleY(.02) scaleX(1.06);filter:brightness(3.4)}
+        30%{transform:scaleY(.006) scaleX(1.3);filter:brightness(6)}
+        40%{transform:scaleY(.004) scaleX(.02);filter:brightness(8)}
+        52%{transform:scaleY(.006) scaleX(1.3);filter:brightness(6)}
+        62%{transform:scaleY(.06) scaleX(1.05);filter:brightness(3)}
+        100%{transform:scaleY(1) scaleX(1);filter:brightness(1)}}
+    #crt .cr-scan{position:absolute;inset:0;opacity:.55;
+        background:repeating-linear-gradient(0deg,rgba(0,0,0,.42) 0 1px,transparent 1px 3px);}
+    #crt .cr-rgb{position:absolute;inset:0;mix-blend-mode:screen;opacity:0;}
+    #crt.on .cr-rgb{animation:crtRgb ${CRT_MS}ms steps(1) forwards;}
+    @keyframes crtRgb{0%,100%{opacity:0}
+        10%{opacity:.7;background:linear-gradient(90deg,rgba(255,0,60,.5),transparent 30%,transparent 70%,rgba(0,180,255,.5));transform:translateX(-6px)}
+        16%{opacity:.6;transform:translateX(7px)}
+        24%{opacity:.8;transform:translateX(-9px)}
+        34%{opacity:.5;transform:translateX(4px)}
+        46%{opacity:.7;transform:translateX(-5px)}
+        60%{opacity:.35;transform:translateX(2px)}
+        76%{opacity:0}}
+    #crt .cr-band{position:absolute;left:-10%;right:-10%;height:22px;opacity:0;
+        background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);
+        mix-blend-mode:overlay;}
+    #crt.on .cr-band{animation:crtBand ${CRT_MS}ms cubic-bezier(.4,0,.6,1) forwards;}
+    @keyframes crtBand{0%{top:-10%;opacity:0}12%{opacity:.9}88%{opacity:.7}100%{top:110%;opacity:0}}
+    #crt .cr-noise{position:absolute;inset:-40%;opacity:0;mix-blend-mode:overlay;
+        background-image:repeating-conic-gradient(#fff 0% 0.0003%,transparent 0% 0.0006%);
+        background-size:150px 150px;}
+    #crt.on .cr-noise{animation:crtNoise ${CRT_MS}ms steps(4) forwards;}
+    @keyframes crtNoise{0%,100%{opacity:0}20%{opacity:.3;transform:translate(-18px,12px)}
+        45%{opacity:.22;transform:translate(14px,-16px)}70%{opacity:.12;transform:translate(-8px,6px)}}
+    #crt .cr-glow{position:absolute;left:0;right:0;top:50%;height:3px;margin-top:-1.5px;opacity:0;
+        background:#fff;box-shadow:0 0 40px 14px rgba(255,255,255,.9);}
+    #crt.on .cr-glow{animation:crtGlow ${CRT_MS}ms ease-out forwards;}
+    @keyframes crtGlow{0%{opacity:0;transform:scaleX(.1)}26%{opacity:1;transform:scaleX(1.2)}
+        48%{opacity:1;transform:scaleX(.05)}58%{opacity:.9;transform:scaleX(1.2)}100%{opacity:0;transform:scaleX(1)}}
+    #crt .cr-lbl{position:absolute;left:0;right:0;top:calc(50% + 34px);text-align:center;opacity:0;
+        font:900 9px/1 ui-monospace,monospace;letter-spacing:.42em;text-transform:uppercase;color:rgba(255,255,255,.6);}
+    #crt.on .cr-lbl{animation:crtLbl ${CRT_MS}ms steps(1) forwards;}
+    @keyframes crtLbl{0%,20%{opacity:0}26%{opacity:1}40%{opacity:.3}48%{opacity:1}70%{opacity:0}}
 
     /* ============ 1. HOME — iris bloom ============ */
     .fx-iris{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:99px;
