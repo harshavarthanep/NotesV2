@@ -17852,6 +17852,204 @@ window.zdScrollToNode = function (node) {
         rows[0].appendChild(tr);
     }, 1600);
 })();    
+                                                                                                            
+    // New Code
+
+    /* ============================================================
+   V9.3 — "OTHER…" ON EVERY PRESET PICKER
+   Quick start · Workout session · Pet care · Colour
+   Your own entries are remembered per type and reappear as chips.
+   Purely additive — V8.0's own handlers are never replaced.
+============================================================ */
+(function zd93() {
+    if (window.__zd93) return; window.__zd93 = true;
+    if (!window.zdTrk) { console.warn('[V9.3] needs V8.0'); return; }
+
+    /* ───────────────────────────────────────────────────────────
+       ⚙ CUSTOMISE
+       ─────────────────────────────────────────────────────────── */
+    const KEEP = 14;   // ⚙ how many of your own entries to remember per picker
+    /* ─────────────────────────────────────────────────────────── */
+
+    const $ = id => document.getElementById(id);
+
+    document.head.insertAdjacentHTML('beforeend', `<style>
+    .zdo-chip{border-style:dashed!important;color:#7d8695!important;}
+    .zdo-chip:hover{border-color:rgb(var(--accent-rgb))!important;color:rgb(var(--accent-rgb))!important;}
+    .zdo-chip.on{border-style:solid!important;}
+    .zdo-row{display:none;gap:6px;margin-top:7px;width:100%;}
+    .zdo-row.on{display:flex;animation:zdoIn .22s cubic-bezier(.22,1,.36,1);}
+    @keyframes zdoIn{0%{opacity:0;transform:translateY(-5px)}100%{opacity:1;transform:none}}
+    .zdo-row input{flex:1;min-width:0;background:rgba(255,255,255,.05);
+        border:1px solid rgb(var(--accent-rgb) / .55);border-radius:9px;padding:8px 11px;
+        font-size:13px;color:#e8ecf5;outline:none;caret-color:rgb(var(--accent-rgb));}
+    @media(max-width:850px){.zdo-row input{font-size:16px;}}
+    .zdo-row input::placeholder{color:#5a6472;}
+    .zdo-row button{flex-shrink:0;padding:0 15px;border-radius:9px;font-size:11px;font-weight:900;
+        color:#fff;background-image:var(--zd-grad);}
+    .zdo-row button:active{transform:scale(.95);}
+    .zdo-mine{position:relative;padding-right:24px!important;}
+    .zdo-x{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:15px;height:15px;
+        border-radius:99px;font-size:11px;line-height:13px;color:#5a6472;background:rgba(255,255,255,.07);}
+    .zdo-x:hover{color:#fff;background:#ef4444;}
+    .zdo-swatch{position:relative;width:30px;height:30px;padding:0!important;border-radius:9px;
+        border:2px dashed rgba(255,255,255,.3)!important;overflow:hidden;cursor:pointer;
+        background:conic-gradient(#ff5f57,#fbbf24,#4ade80,#38bdf8,#a78bfa,#f472b6,#ff5f57)!important;}
+    .zdo-swatch input{position:absolute;inset:0;opacity:0;cursor:pointer;border:0;padding:0;}
+    </style>`);
+
+    /* ---------- remembered entries ---------- */
+    const mine = k => { try { return JSON.parse(localStorage.getItem('zdOther_' + k) || '[]'); } catch (e) { return []; } };
+    function remember(k, v) {
+        const a = mine(k).filter(x => x.toLowerCase() !== v.toLowerCase());
+        a.unshift(v);
+        localStorage.setItem('zdOther_' + k, JSON.stringify(a.slice(0, KEEP)));
+    }
+    function forget(k, v) {
+        localStorage.setItem('zdOther_' + k, JSON.stringify(mine(k).filter(x => x !== v)));
+    }
+
+    /* ---------- carrier: routes a custom value through V8.0's own handler ----------
+       V8.0 wires each chip to read its data-v, so we borrow a wired sibling for one
+       synthetic click. The value lands in V8.0's state exactly as a preset would,
+       then the sibling is restored — nothing is left changed. */
+    function apply(container, value, chip) {
+        const carrier = container.querySelector('.trk-p[data-v]');
+        if (!carrier) return false;
+        const v0 = carrier.dataset.v, h0 = carrier.innerHTML;
+        carrier.dataset.v = value;
+        carrier.click();
+        carrier.dataset.v = v0; carrier.innerHTML = h0;
+        container.querySelectorAll('.trk-p').forEach(x => x.classList.remove('on'));
+        if (chip) chip.classList.add('on');
+        return true;
+    }
+
+    /* ---------- attach an Other… control to any chip container ---------- */
+    function attach(container, storeKey, placeholder, current) {
+        if (!container || container.dataset.zdo) return;
+        container.dataset.zdo = '1';
+
+        /* remembered entries first, as ordinary-looking chips */
+        mine(storeKey).forEach(v => {
+            const b = document.createElement('button');
+            b.className = 'trk-p zdo-mine' + (current && current.toLowerCase() === v.toLowerCase() ? ' on' : '');
+            b.innerHTML = escapeHtml(v) + '<span class="zdo-x" title="Remove">×</span>';
+            b.onclick = (e) => {
+                if (e.target.classList.contains('zdo-x')) {
+                    e.stopPropagation(); forget(storeKey, v); b.remove(); return;
+                }
+                apply(container, v, b);
+            };
+            container.appendChild(b);
+        });
+
+        /* the Other… chip */
+        const other = document.createElement('button');
+        other.className = 'trk-p zdo-chip';
+        other.innerHTML = '+ Other…';
+        container.appendChild(other);
+
+        /* inline input, placed after the picker so it never breaks the wrap */
+        const row = document.createElement('div');
+        row.className = 'zdo-row';
+        row.innerHTML = `<input type="text" maxlength="40" placeholder="${placeholder}" autocomplete="off" spellcheck="false"><button type="button">Add</button>`;
+        container.insertAdjacentElement('afterend', row);
+        const inp = row.querySelector('input'), ok = row.querySelector('button');
+
+        const commit = () => {
+            const v = inp.value.trim();
+            if (!v) { inp.focus(); return; }
+            remember(storeKey, v);
+            const b = document.createElement('button');
+            b.className = 'trk-p zdo-mine';
+            b.innerHTML = escapeHtml(v) + '<span class="zdo-x" title="Remove">×</span>';
+            b.onclick = (e) => {
+                if (e.target.classList.contains('zdo-x')) { e.stopPropagation(); forget(storeKey, v); b.remove(); return; }
+                apply(container, v, b);
+            };
+            container.insertBefore(b, other);
+            apply(container, v, b);
+            inp.value = ''; row.classList.remove('on'); other.classList.remove('on');
+            showToast('Added “' + v + '”.');
+        };
+        other.onclick = () => {
+            const open = row.classList.toggle('on');
+            other.classList.toggle('on', open);
+            if (open) setTimeout(() => { try { inp.focus({ preventScroll: true }); zdArmProtect(inp); } catch (e) {} }, 90);
+        };
+        ok.onclick = commit;
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+        ['focusin', 'pointerup', 'input'].forEach(ev => inp.addEventListener(ev, () => { try { zdArmProtect(inp); } catch (e) {} }));
+    }
+
+    /* ---------- 1. LOG SHEET: Session (gym) / Care (pet) ---------- */
+    const _log = window.trkLog;
+    window.trkLog = function (id, dateKey) {
+        const r = _log.apply(this, arguments);
+        setTimeout(() => {
+            const c = $('lg-class'); if (!c) return;
+            const t = (window.zdTrk.list || []).find(x => x.id === id);
+            const kind = t ? t.kind : 'gym';
+            const cur = (t && t.logs && t.logs[dateKey || ''] && t.logs[dateKey].klass) || '';
+            attach(c, 'class_' + kind,
+                kind === 'pet' ? 'e.g. Misted leaves, Nail trim…' : 'e.g. Calisthenics, Boxing, Pilates…',
+                cur);
+        }, 40);
+        return r;
+    };
+
+    /* ---------- 2. EDIT SHEET: Quick start + Colour ---------- */
+    function injectEdit() {
+        const box = $('trk-edit-box'); if (!box) return;
+
+        /* quick start — reveal a blank form and jump to the name field */
+        const lbl = Array.from(box.querySelectorAll('.trk-l')).find(l => /quick start/i.test(l.textContent));
+        const qs = lbl && lbl.nextElementSibling;
+        if (qs && qs.classList.contains('trk-pick') && !qs.dataset.zdoQs) {
+            qs.dataset.zdoQs = '1';
+            const b = document.createElement('button');
+            b.className = 'trk-p zdo-chip';
+            b.innerHTML = '+ Something else…';
+            b.onclick = () => {
+                const n = $('ed-name');
+                if (!n) return;
+                n.value = '';
+                qs.querySelectorAll('.trk-p').forEach(x => x.classList.remove('on'));
+                b.classList.add('on');
+                try { n.focus({ preventScroll: true }); zdArmProtect(n); } catch (e) {}
+                n.scrollIntoView({ block: 'nearest' });
+                showToast('Name it whatever you track — then pick a type below.');
+            };
+            qs.appendChild(b);
+        }
+
+        /* colour — native picker, routed through V8.0's own swatch handler */
+        const col = $('ed-col');
+        if (col && !col.dataset.zdoCol) {
+            col.dataset.zdoCol = '1';
+            const w = document.createElement('label');
+            w.className = 'trk-p zdo-swatch';
+            w.title = 'Any colour you like';
+            w.innerHTML = '<input type="color" value="#4ade80">';
+            const pick = w.querySelector('input');
+            pick.oninput = () => {
+                w.style.background = pick.value + '!important';
+                w.style.setProperty('background', pick.value, 'important');
+                w.style.borderStyle = 'solid';
+                apply(col, pick.value, null);
+                col.querySelectorAll('.trk-p').forEach(x => x.style.borderColor = 'transparent');
+                w.style.borderColor = '#fff';
+            };
+            col.appendChild(w);
+        }
+    }
+    ['trkNew', 'trkEdit', 'trkPreset'].forEach(fn => {
+        const o = window[fn];
+        if (typeof o !== 'function') return;
+        window[fn] = function () { const r = o.apply(this, arguments); setTimeout(injectEdit, 60); return r; };
+    });
+})();
 
     /* ============================================================
        INIT
