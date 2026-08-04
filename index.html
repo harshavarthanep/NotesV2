@@ -17782,6 +17782,52 @@ window.zdScrollToNode = function (node) {
     }, true);
 })();    
 
+    // New Code
+
+    /* ============================================================
+   V9.2 — DAILY REVIEW: PERMANENT ACCESS
+   Alt+D shortcut · guaranteed menu entry · feature switch · help
+============================================================ */
+(function zd92() {
+    if (window.__zd92) return; window.__zd92 = true;
+    const ICO = '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4l1.4-1.4"/>';
+
+    /* the menu entry may already exist from V7.3 — only add it if missing */
+    setTimeout(() => {
+        if (!document.querySelector('[data-zdfn="daily"]')) {
+            try { zdMenuInject2('daily', 'openDaily', 'Daily review', ICO); } catch (e) {}
+        }
+        try {
+            if (!ZD_FEATURES.some(f => f.id === 'daily'))
+                ZD_FEATURES.push({ id: 'daily', label: 'Daily review', fns: ['openDaily'] });
+            ZD_FEAT_ICONS.daily = ICO;
+            applyFeatureFlags();
+        } catch (e) {}
+    }, 800);
+
+    /* ⚙ SHORTCUT: Alt+D opens the daily review from anywhere */
+    window.addEventListener('keydown', (e) => {
+        if (e.altKey && !e.ctrlKey && !e.metaKey && ((e.key || '').toLowerCase() === 'd' || e.code === 'KeyD')) {
+            const ae = document.activeElement;
+            if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+            e.preventDefault();
+            if (typeof zdFeatOn === 'function' && !zdFeatOn('daily')) return;
+            openDaily();
+        }
+    }, true);
+
+    /* add it to the shortcut table in Help */
+    setTimeout(() => {
+        const rows = document.querySelectorAll('#help-modal table tbody');
+        if (!rows.length) return;
+        const K = k => '<kbd style="display:inline-block;padding:1px 6px;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-color);font:700 10.5px ui-monospace,monospace;color:var(--text-color)">' + k + '</kbd>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td style="padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">' + K('Alt') + ' + ' + K('D') +
+            '</td><td style="padding:3px 0;font-size:12px;line-height:1.5">Daily review — habit check-in, today\u2019s note and the notes worth reopening</td>';
+        rows[0].appendChild(tr);
+    }, 1600);
+})();    
+
     /* ============================================================
        INIT
     ============================================================ */
