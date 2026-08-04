@@ -16954,45 +16954,88 @@ window.zdScrollToNode = function (node) {
     #fx.on{display:block;}
     #fx .fx-l{position:absolute;inset:0;}
 
-               /* ============ THEME SWITCH — circular reveal from the tap point ============ */
-    /* Path A — View Transitions API (Chrome/Edge): a true snapshot crossfade.
-       The old theme holds still while the new one irises open over it. */
-    ::view-transition-group(root){animation-duration:${CRT_MS}ms;}
-    ::view-transition-old(root),::view-transition-new(root){
-        animation:none;mix-blend-mode:normal;backface-visibility:hidden;}
-    ::view-transition-old(root){z-index:1;}
-    ::view-transition-new(root){z-index:9999;
-        animation:crIris ${CRT_MS}ms cubic-bezier(.05,.7,.1,1) both;}
-    @keyframes crIris{
-        from{clip-path:circle(0% at var(--cr-x,50%) var(--cr-y,50%))}
-        to  {clip-path:circle(var(--cr-r,150%) at var(--cr-x,50%) var(--cr-y,50%))}}
+              /* ============ THEME SWITCH — lightning storm & sunrise ============ */
+    #crt{position:fixed;inset:0;z-index:199;display:none;overflow:hidden;pointer-events:none;}
+    #crt.on{display:block;animation:crHold ${CRT_MS}ms linear forwards;}
+    @keyframes crHold{0%,86%{opacity:1}100%{opacity:0}}
 
-    /* Path B — fallback: two flat layers, GPU-clipped. The new theme's colour
-       irises over the old one from the same point, then both dissolve away
-       against the real UI that already sits beneath them. */
-    #crt{position:fixed;inset:0;z-index:199;display:none;pointer-events:none;
-        contain:strict;isolation:isolate;}
-    #crt.on{display:block;}
-    #crt .cr-old{position:absolute;inset:0;background:var(--cr-from,#141414);}
-    #crt .cr-new{position:absolute;inset:0;background:var(--cr-to,#f4efe6);
-        will-change:clip-path;
-        clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%));
-        -webkit-clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%));}
-    #crt.on .cr-new{animation:crWipe ${CRT_MS}ms cubic-bezier(.05,.7,.1,1) forwards;}
-    @keyframes crWipe{
-        from{clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%));
-             -webkit-clip-path:circle(0px at var(--cr-px,50%) var(--cr-py,50%))}
-        to  {clip-path:circle(var(--cr-rad,140vmax) at var(--cr-px,50%) var(--cr-py,50%));
-             -webkit-clip-path:circle(var(--cr-rad,140vmax) at var(--cr-px,50%) var(--cr-py,50%))}}
-    /* the flat layers hand off to the real interface — 140ms, imperceptible */
-    #crt.on .cr-old,#crt.on .cr-new{animation-fill-mode:forwards;}
-    #crt.settle{transition:opacity 140ms linear;opacity:0;}
+    /* the incoming theme, revealed top → bottom */
+    #crt .cr-veil{position:absolute;inset:0;background:var(--cr-to,#141414);will-change:clip-path;
+        -webkit-clip-path:inset(0 0 100% 0);clip-path:inset(0 0 100% 0);}
+    #crt.night .cr-veil{animation:crDown ${CRT_MS}ms cubic-bezier(.35,.02,.2,1) forwards;}
+    #crt.day   .cr-veil{animation:crDownSoft ${CRT_MS}ms cubic-bezier(.24,.68,.16,1) forwards;}
+    @keyframes crDown{0%,20%{-webkit-clip-path:inset(0 0 100% 0);clip-path:inset(0 0 100% 0)}
+        66%,100%{-webkit-clip-path:inset(0 0 0 0);clip-path:inset(0 0 0 0)}}
+    @keyframes crDownSoft{0%,12%{-webkit-clip-path:inset(0 0 100% 0);clip-path:inset(0 0 100% 0)}
+        72%,100%{-webkit-clip-path:inset(0 0 0 0);clip-path:inset(0 0 0 0)}}
 
-    @media (prefers-reduced-motion:reduce){
-        ::view-transition-group(root){animation-duration:1ms;}
-        ::view-transition-new(root){animation-duration:1ms;}
-        #crt{display:none!important;}
-    }
+    /* ---------- NIGHT: the storm ---------- */
+    #crt .cr-storm{position:absolute;inset:0;opacity:0;
+        background:linear-gradient(180deg,#050a14 0%,#0a1220 40%,rgba(12,20,34,.5) 78%,transparent);}
+    #crt.night .cr-storm{animation:crStorm ${CRT_MS}ms cubic-bezier(.35,.02,.2,1) forwards;}
+    @keyframes crStorm{0%{opacity:0;transform:translateY(-40%)}
+        16%{opacity:.9;transform:translateY(-8%)}60%{opacity:1;transform:none}100%{opacity:1}}
+    #crt .cr-bolts{position:absolute;inset:0;width:100%;height:100%;opacity:0;}
+    #crt .cr-bolts path{fill:none;stroke:#fff;stroke-linecap:round;stroke-linejoin:round;
+        vector-effect:non-scaling-stroke;
+        filter:drop-shadow(0 0 4px #fff) drop-shadow(0 0 14px rgba(190,220,255,.95))
+               drop-shadow(0 0 40px rgba(120,170,255,.7));}
+    #crt .cr-bolts .b-main{stroke-width:2.6;}
+    #crt .cr-bolts .b-br{stroke-width:1.3;opacity:.8;}
+    #crt.night .cr-bolts{animation:crStrike ${CRT_MS}ms steps(1) forwards;}
+    @keyframes crStrike{0%,7%{opacity:0}
+        8%{opacity:1}11%{opacity:.15}
+        13%{opacity:1}17%{opacity:.05}
+        19%{opacity:1}26%{opacity:.5}
+        29%{opacity:.9}34%{opacity:0}100%{opacity:0}}
+    #crt .cr-flash{position:absolute;inset:0;opacity:0;
+        background:radial-gradient(140% 90% at var(--bx,50%) 0%,#fff 0%,rgba(214,232,255,.9) 26%,rgba(150,190,255,.34) 54%,transparent 78%);}
+    #crt.night .cr-flash{animation:crFlash ${CRT_MS}ms steps(1) forwards;}
+    @keyframes crFlash{0%,7%{opacity:0}
+        8%{opacity:.85}11%{opacity:.05}
+        13%{opacity:1}17%{opacity:0}
+        19%{opacity:.95}25%{opacity:.12}
+        29%{opacity:.4}36%{opacity:0}100%{opacity:0}}
+    #crt .cr-rain{position:absolute;top:-14%;width:1.4px;border-radius:99px;opacity:0;
+        background:linear-gradient(180deg,transparent,rgba(196,220,255,.65),transparent);}
+    #crt.night .cr-rain{animation:crRain linear forwards;}
+    @keyframes crRain{0%{opacity:0;transform:translateY(0)}
+        18%{opacity:.7}100%{opacity:0;transform:translateY(128vh)}}
+
+    /* ---------- DAY: the sunrise ---------- */
+    #crt .cr-warm{position:absolute;inset:0;opacity:0;
+        background:linear-gradient(180deg,#fff6e0 0%,#ffd98a 26%,rgba(255,183,94,.55) 58%,rgba(255,158,80,.18) 82%,transparent);}
+    #crt.day .cr-warm{animation:crWarm ${CRT_MS}ms cubic-bezier(.24,.68,.16,1) forwards;}
+    @keyframes crWarm{0%{opacity:0;transform:translateY(-46%)}
+        24%{opacity:.92;transform:translateY(-10%)}64%{opacity:1;transform:none}100%{opacity:1}}
+    #crt .cr-rays{position:absolute;left:50%;top:0;width:230vmax;height:230vmax;
+        margin:-115vmax 0 0 -115vmax;opacity:0;transform-origin:50% 50%;
+        background:repeating-conic-gradient(from 0deg,
+            rgba(255,238,196,.30) 0deg 1.6deg,transparent 1.6deg 9deg,
+            rgba(255,226,168,.16) 9deg 10.2deg,transparent 10.2deg 18deg);
+        -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 6%,rgba(0,0,0,.55) 26%,transparent 47%);
+                mask-image:radial-gradient(circle at 50% 50%,#000 6%,rgba(0,0,0,.55) 26%,transparent 47%);}
+    #crt.day .cr-rays{animation:crRays ${CRT_MS}ms cubic-bezier(.2,.6,.2,1) forwards;}
+    @keyframes crRays{0%{opacity:0;transform:rotate(-9deg) scale(.62)}
+        26%{opacity:.95;transform:rotate(-2deg) scale(.94)}
+        66%{opacity:.8;transform:rotate(5deg) scale(1.06)}
+        100%{opacity:0;transform:rotate(11deg) scale(1.2)}}
+    #crt .cr-sun{position:absolute;left:50%;top:0;width:min(78vmin,520px);height:min(78vmin,520px);
+        margin:calc(min(78vmin,520px) * -.58) 0 0 calc(min(78vmin,520px) / -2);opacity:0;border-radius:99px;
+        background:radial-gradient(circle,#fff 0%,#fff6d8 22%,#ffd07a 44%,rgba(255,166,74,.42) 66%,transparent 80%);}
+    #crt.day .cr-sun{animation:crSun ${CRT_MS}ms cubic-bezier(.2,.7,.2,1) forwards;}
+    @keyframes crSun{0%{opacity:0;transform:translateY(-16%) scale(.5)}
+        26%{opacity:1;transform:translateY(0) scale(1)}
+        70%{opacity:.95;transform:translateY(4%) scale(1.12)}
+        100%{opacity:0;transform:translateY(7%) scale(1.24)}}
+    #crt .cr-mote{position:absolute;border-radius:99px;background:rgba(255,246,214,.9);opacity:0;
+        box-shadow:0 0 7px 2px rgba(255,214,140,.7);}
+    #crt.day .cr-mote{animation:crMote cubic-bezier(.3,.7,.3,1) forwards;}
+    @keyframes crMote{0%{opacity:0;transform:translateY(28px) scale(.4)}
+        30%{opacity:1;transform:translateY(0) scale(1)}
+        100%{opacity:0;transform:translateY(-46px) scale(.5)}}
+
+    @media (prefers-reduced-motion:reduce){#crt{display:none!important;}}
 
     /* ============ 1. HOME — iris bloom ============ */
     .fx-iris{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:99px;
@@ -17105,7 +17148,16 @@ window.zdScrollToNode = function (node) {
 
     document.body.insertAdjacentHTML('beforeend', `
     <div id="fx"><div class="fx-l" id="fx-l"></div></div>
-    <div id="crt"><div class="cr-old"></div><div class="cr-new"></div></div>`);
+    <div id="crt">
+      <div class="cr-veil"></div>
+      <div class="cr-storm"></div>
+      <div class="cr-warm"></div>
+      <div class="cr-rays"></div>
+      <div class="cr-sun"></div>
+      <svg class="cr-bolts" id="cr-bolts" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+      <div class="cr-flash"></div>
+      <div id="cr-bits"></div>
+    </div>`);
 
     const $ = id => document.getElementById(id);
     const L = $('fx-l'), FX = $('fx');
@@ -17267,65 +17319,100 @@ window.zdScrollToNode = function (node) {
 //         });
 //     }, 900);
 // })();    
-         /* ============ THEME SWITCH — circular reveal ============ */
-    /* Remember where the user last touched, so the reveal grows from there. */
-    let cx = null, cy = null;
+         /* ============ THEME SWITCH — lightning storm & sunrise ============ */
+    let tapX = null;
     ['pointerdown', 'click'].forEach(ev => window.addEventListener(ev, e => {
-        if (typeof e.clientX === 'number' && (e.clientX || e.clientY)) { cx = e.clientX; cy = e.clientY; }
+        if (typeof e.clientX === 'number' && e.clientX) tapX = e.clientX;
     }, true));
 
-    function origin() {
-        const w = window.innerWidth, h = window.innerHeight;
-        const x = (cx == null ? w - 40 : cx), y = (cy == null ? 44 : cy);
-        /* radius must reach the farthest corner, or the wipe leaves a gap */
-        const r = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
-        return { x: x, y: y, r: Math.ceil(r) + 2 };
+    /* a jagged bolt, generated fresh each strike so no two are alike */
+    function bolt(x0, len, jitter) {
+        let d = 'M' + x0.toFixed(1) + ' 0', x = x0, y = 0;
+        while (y < len) {
+            y += 5 + Math.random() * 8;
+            x += (Math.random() - 0.5) * jitter;
+            d += ' L' + Math.max(-6, Math.min(106, x)).toFixed(1) + ' ' + Math.min(y, len).toFixed(1);
+        }
+        return { d: d, x: x, y: Math.min(y, len) };
     }
+    function buildNight() {
+        const bx = tapX == null ? 50 : Math.max(16, Math.min(84, tapX / window.innerWidth * 100));
+        $('crt').style.setProperty('--bx', bx.toFixed(1) + '%');
+        const main = bolt(bx, 100, 15);
+        let svg = '<path class="b-main" d="' + main.d + '"/>';
+        /* forked branches peeling off the trunk */
+        const segs = main.d.split(' L');
+        for (let i = 0; i < 3; i++) {
+            const at = segs[2 + Math.floor(Math.random() * (segs.length - 4))];
+            if (!at) continue;
+            const p = at.split(' ');
+            let bd = 'M' + p[0] + ' ' + p[1], x = +p[0], y = +p[1];
+            const dir = Math.random() < .5 ? -1 : 1, steps = 3 + Math.floor(Math.random() * 3);
+            for (let s = 0; s < steps; s++) {
+                y += 4 + Math.random() * 7;
+                x += dir * (3 + Math.random() * 7);
+                bd += ' L' + x.toFixed(1) + ' ' + Math.min(y, 100).toFixed(1);
+            }
+            svg += '<path class="b-br" d="' + bd + '"/>';
+        }
+        /* a distant secondary strike for depth */
+        const far = bolt(bx > 50 ? 12 + Math.random() * 16 : 72 + Math.random() * 16, 62, 11);
+        svg += '<path class="b-br" style="opacity:.4;stroke-width:1" d="' + far.d + '"/>';
+        $('cr-bolts').innerHTML = svg;
+
+        /* rain */
+        const N = window.innerWidth < 620 ? 22 : 42;
+        let bits = '';
+        for (let i = 0; i < N; i++) {
+            bits += `<span class="cr-rain" style="left:${(Math.random() * 104 - 2).toFixed(1)}%;
+                height:${(38 + Math.random() * 70).toFixed(0)}px;
+                animation-duration:${(560 + Math.random() * 420).toFixed(0)}ms;
+                animation-delay:${(120 + Math.random() * 520).toFixed(0)}ms"></span>`;
+        }
+        $('cr-bits').innerHTML = bits;
+    }
+    function buildDay() {
+        const N = window.innerWidth < 620 ? 14 : 26;
+        let bits = '';
+        for (let i = 0; i < N; i++) {
+            const s = 2 + Math.random() * 3.5;
+            bits += `<span class="cr-mote" style="left:${(Math.random() * 100).toFixed(1)}%;
+                top:${(10 + Math.random() * 78).toFixed(1)}%;width:${s.toFixed(1)}px;height:${s.toFixed(1)}px;
+                animation-duration:${(700 + Math.random() * 560).toFixed(0)}ms;
+                animation-delay:${(180 + Math.random() * 620).toFixed(0)}ms"></span>`;
+        }
+        $('cr-bits').innerHTML = bits;
+        $('cr-bolts').innerHTML = '';
+    }
+    function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
 
     const _tt = window.toggleTheme;
     if (typeof _tt === 'function') {
         window.toggleTheme = function () {
             if (busy) return;
-            const reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-            if (reduce) return _tt.apply(this, arguments);
-
-            const o = origin();
-            const wasDark = document.documentElement.classList.contains('dark');
-            const self = this, args = arguments;
-
-            /* ---- Path A: real snapshot crossfade ---- */
-            if (document.startViewTransition) {
-                const r = document.documentElement.style;
-                r.setProperty('--cr-x', o.x + 'px');
-                r.setProperty('--cr-y', o.y + 'px');
-                r.setProperty('--cr-r', o.r + 'px');
-                busy = true;
-                let t;
-                try { t = document.startViewTransition(() => { _tt.apply(self, args); }); }
-                catch (e) { busy = false; return _tt.apply(self, args); }
-                t.finished.finally(() => {
-                    r.removeProperty('--cr-x'); r.removeProperty('--cr-y'); r.removeProperty('--cr-r');
-                    busy = false;
-                });
-                return;
-            }
-
-            /* ---- Path B: flat-colour iris ---- */
+            if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return _tt.apply(this, arguments);
             busy = true;
-            const crt = $('crt');
+            const goingDark = !document.documentElement.classList.contains('dark');
+            const crt = $('crt'), self = this, args = arguments;
             crt.className = '';
-            crt.style.opacity = '';
-            crt.style.setProperty('--cr-from', wasDark ? '#141414' : '#f4efe6');
-            crt.style.setProperty('--cr-to',   wasDark ? '#f4efe6' : '#141414');
-            crt.style.setProperty('--cr-px', o.x + 'px');
-            crt.style.setProperty('--cr-py', o.y + 'px');
-            crt.style.setProperty('--cr-rad', o.r + 'px');
+            crt.style.setProperty('--cr-to', goingDark ? '#141414' : '#f4efe6');
+            goingDark ? buildNight() : buildDay();
             void crt.offsetWidth;
-            crt.className = 'on';
-            /* flip beneath the cover, one frame in, so no flicker escapes */
-            requestAnimationFrame(() => requestAnimationFrame(() => { _tt.apply(self, args); }));
-            setTimeout(() => { crt.classList.add('settle'); }, CRT_MS - 40);
-            setTimeout(() => { crt.className = ''; crt.style.opacity = ''; busy = false; }, CRT_MS + 180);
+            crt.className = 'on ' + (goingDark ? 'night' : 'day');
+
+            if (goingDark) {
+                buzz([12, 26, 6, 18, 9]);                       /* the crack */
+                setTimeout(() => buzz([60, 40, 120, 60, 90]), 190);  /* rolling thunder */
+            } else {
+                buzz([6, 110, 9, 120, 14, 130, 20, 140, 26]);   /* a slow warm swell */
+            }
+            /* flip the real theme while the veil covers the screen */
+            setTimeout(() => { _tt.apply(self, args); }, Math.round(CRT_MS * 0.76));
+            setTimeout(() => {
+                crt.className = '';
+                $('cr-bolts').innerHTML = ''; $('cr-bits').innerHTML = '';
+                busy = false;
+            }, CRT_MS + 90);
         };
     }
 
@@ -17337,7 +17424,7 @@ window.zdScrollToNode = function (node) {
             b.addEventListener('click', e => {
                 e.preventDefault();
                 const r = b.getBoundingClientRect();
-                cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+                tapX = r.left + r.width / 2;
                 toggleTheme();
             });
         });
@@ -17346,7 +17433,7 @@ window.zdScrollToNode = function (node) {
             b.removeAttribute('onclick');
             b.addEventListener('click', () => {
                 const r = b.getBoundingClientRect();
-                cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+                tapX = r.left + r.width / 2;
                 toggleTheme();
                 try { toggleMoreMenu(); } catch (e) {}
                 try { toggleMobileMenu(); } catch (e) {}
