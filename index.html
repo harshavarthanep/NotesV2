@@ -17746,7 +17746,10 @@ window.zdScrollToNode = function (node) {
         const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.6"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
         const LINK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M13.8 10.2a4 4 0 010 5.7l-3 3a4 4 0 11-5.6-5.7"/></svg>';
         const STAR = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9L12 17l-5.2 2.8 1-5.9-4.3-4.2 5.9-.8L12 3.5z"/></svg>';
-        const PIN = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 4h6l-.6 5.2 3.1 2.5v1.8H6.5v-1.8l3.1-2.5L9 4zm3 9.5V20"/></svg>';
+        /* reuse the app's own pin glyph if it's defined, else the matching bookmark */
+        const PIN = (typeof PIN_SVG !== 'undefined' ? PIN_SVG
+                   : typeof BOOKMARK_SVG !== 'undefined' ? BOOKMARK_SVG
+                   : '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 4.8A1.8 1.8 0 017.8 3h8.4A1.8 1.8 0 0118 4.8V21l-6-3.4L6 21V4.8z"/></svg>');
 
         pool.filter(d => d.eisDue && !d.eisDone && d.eisDue < now.getTime() + 864e5)
             .sort((a, b) => a.eisDue - b.eisDue).slice(0, 3)
