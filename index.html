@@ -13278,6 +13278,7 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
 
     function seal(reason) {
         if (!isSmall() || state.isGuest || !state.docId) return;
+        if (unsealed && reason !== 'idle') return;   /* an active editing session is never re-veiled */
         if (document.body.classList.contains('zd-locked')) return;
         if (document.body.classList.contains('zen') || state.reading) return;
         if (document.body.classList.contains('zd-read')) return;
@@ -13415,7 +13416,32 @@ setTimeout(() => { try { applyFeatureFlags(); } catch (e) {} }, 500);
         window.addEventListener(ev, () => { if (unsealed && !document.body.classList.contains('zd-read')) armIdle(); },
             { capture: true, passive: true }));
     quill.on('text-change', (d, o, src) => { if (src === 'user') armIdle(); });
-    els.title.addEventListener('input', armIdle);    
+    els.title.addEventListener('input', armIdle);
+
+    /* ---------- creating a note is an intent to write: no veil, no pill ---------- */
+    function startFresh() {
+        if (!isSmall() || state.isGuest) return;
+        unsealed = true;
+        clearTimeout(idleT);
+        document.body.classList.remove('zd-read', 'zd-unsealing');
+        pill.classList.remove('on', 'go');
+        try { if (!state.reading) quill.enable(true); } catch (e) {}
+        try { els.title.readOnly = false; } catch (e) {}
+        armIdle();
+    }
+    window.zdStartFresh = startFresh;
+    /* ⚙ remove 'openDailyNote' from this list if you want the daily note veiled like any other */
+    ['createNewDoc', 'openDailyNote', 'duplicateCurrentDoc', 'duplicateDocFromSidebar',
+     'createFromTemplate', 'useTemplate', 'applyTemplate', 'newNoteFromTemplate'].forEach(fn => {
+        const o = window[fn];
+        if (typeof o !== 'function') return;
+        window[fn] = function () {
+            startFresh();
+            const r = o.apply(this, arguments);
+            [80, 320, 800].forEach(t => setTimeout(startFresh, t));   /* covers the async write + openDoc */
+            return r;
+        };
+    }); 
 
     /* ---------- sidebar open state (so the pill blurs with the note) ---------- */
     (function watchSidebar() {
@@ -18844,837 +18870,837 @@ window.zdScrollToNode = function (node) {
 
     // New Code
 
-    /* ============================================================
-   V9.7 — MOTION & EFFECTS
-   A dedicated panel, kept apart from "Features on this device".
-   Every effect can be switched off individually or all at once.
-   Exposes window.zdFx(id) — the gate every effect patch checks.
-============================================================ */
-(function zd97() {
-    if (window.__zd97) return; window.__zd97 = true;
+//     /* ============================================================
+//    V9.7 — MOTION & EFFECTS
+//    A dedicated panel, kept apart from "Features on this device".
+//    Every effect can be switched off individually or all at once.
+//    Exposes window.zdFx(id) — the gate every effect patch checks.
+// ============================================================ */
+// (function zd97() {
+//     if (window.__zd97) return; window.__zd97 = true;
 
-    const FX = [
-        ['theme',   'Theme switch',      'Storm and sunrise when you change light / dark',
-            '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4"/>'],
-        ['loading', 'Loading screen',    'The animated mark while the app starts',
-            '<circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/>'],
-        ['edit',    'Tap to edit',       'The unseal sweep on phones and tablets',
-            '<path stroke-linecap="round" stroke-linejoin="round" d="M16.9 4.4l2.7 2.7-11 11L5 19l.9-3.6 11-11z"/>'],
-        ['home',    'Home',              'Spiralling shuriken burst',
-            '<path stroke-linecap="round" stroke-linejoin="round" d="M3 12l9-8 9 8M5 10v10h14V10"/>'],
-        ['today',   'Daily note',        'Sunrise wipe',
-            '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M2 12h2m16 0h2"/>'],
-        ['month',   'Calendar',          'All-seeing radial vision',
-            '<rect x="3" y="5" width="18" height="16" rx="2"/><path stroke-linecap="round" d="M8 3v4m8-4v4M3 10h18"/>'],
-        ['board',   'Board',             'Blade arc slash',
-            '<rect x="3.5" y="4" width="4.6" height="16" rx="1"/><rect x="9.8" y="4" width="4.6" height="10" rx="1"/><rect x="16" y="4" width="4.6" height="13" rx="1"/>'],
-        ['canvas',  'Canvas',            'Chidori lightning surge',
-            '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="6.5" width="7" height="7" rx="1.5"/><rect x="8" y="14" width="7" height="7" rx="1.5"/>'],
-        ['tmpl',    'Templates',         'Spiralling energy orb',
-            '<rect x="4" y="7" width="10" height="14" rx="2"/><path stroke-linecap="round" d="M9 7V5a2 2 0 012-2h5.6L20 6.4V15a2 2 0 01-2 2h-2"/>'],
-        ['matrix',  'Eisenhower matrix', 'Great fireball',
-            '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>'],
-        ['graph',   'Graph view',        'Node constellation burst',
-            '<circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="8" r="2.4"/><circle cx="9" cy="18" r="2.4"/>'],
-        ['grid',    'The Grid',          'Neon tunnel dive',
-            '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>'],
-        ['meet',    'Meeting mode',      'Mind-link ripple',
-            '<rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/>']
-    ];
+//     const FX = [
+//         ['theme',   'Theme switch',      'Storm and sunrise when you change light / dark',
+//             '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4"/>'],
+//         ['loading', 'Loading screen',    'The animated mark while the app starts',
+//             '<circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/>'],
+//         ['edit',    'Tap to edit',       'The unseal sweep on phones and tablets',
+//             '<path stroke-linecap="round" stroke-linejoin="round" d="M16.9 4.4l2.7 2.7-11 11L5 19l.9-3.6 11-11z"/>'],
+//         ['home',    'Home',              'Spiralling shuriken burst',
+//             '<path stroke-linecap="round" stroke-linejoin="round" d="M3 12l9-8 9 8M5 10v10h14V10"/>'],
+//         ['today',   'Daily note',        'Sunrise wipe',
+//             '<circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M2 12h2m16 0h2"/>'],
+//         ['month',   'Calendar',          'All-seeing radial vision',
+//             '<rect x="3" y="5" width="18" height="16" rx="2"/><path stroke-linecap="round" d="M8 3v4m8-4v4M3 10h18"/>'],
+//         ['board',   'Board',             'Blade arc slash',
+//             '<rect x="3.5" y="4" width="4.6" height="16" rx="1"/><rect x="9.8" y="4" width="4.6" height="10" rx="1"/><rect x="16" y="4" width="4.6" height="13" rx="1"/>'],
+//         ['canvas',  'Canvas',            'Chidori lightning surge',
+//             '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="6.5" width="7" height="7" rx="1.5"/><rect x="8" y="14" width="7" height="7" rx="1.5"/>'],
+//         ['tmpl',    'Templates',         'Spiralling energy orb',
+//             '<rect x="4" y="7" width="10" height="14" rx="2"/><path stroke-linecap="round" d="M9 7V5a2 2 0 012-2h5.6L20 6.4V15a2 2 0 01-2 2h-2"/>'],
+//         ['matrix',  'Eisenhower matrix', 'Great fireball',
+//             '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>'],
+//         ['graph',   'Graph view',        'Node constellation burst',
+//             '<circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="8" r="2.4"/><circle cx="9" cy="18" r="2.4"/>'],
+//         ['grid',    'The Grid',          'Neon tunnel dive',
+//             '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>'],
+//         ['meet',    'Meeting mode',      'Mind-link ripple',
+//             '<rect x="9" y="3" width="6" height="11" rx="3"/><path stroke-linecap="round" d="M5 11a7 7 0 0014 0M12 18v3"/>']
+//     ];
 
-    document.head.insertAdjacentHTML('beforeend', `<style>
-    #fxs{position:fixed;inset:0;z-index:129;display:none;align-items:flex-end;justify-content:center;
-        background:rgba(4,6,11,.7);backdrop-filter:blur(9px);}
-    #fxs.open{display:flex;animation:fadeIn .22s ease-out;}
-    @media(min-width:640px){#fxs{align-items:center;padding:18px;}}
-    #fxs-box{width:100%;max-width:440px;max-height:90vh;display:flex;flex-direction:column;
-        background:var(--surface-color);border:1px solid var(--border-color);
-        border-radius:22px 22px 0 0;overflow:hidden;box-shadow:0 -22px 64px rgba(0,0,0,.5);
-        animation:dr2Up .4s cubic-bezier(.22,1,.36,1);}
-    @media(min-width:640px){#fxs-box{border-radius:22px;animation:boxIn .34s cubic-bezier(.22,1,.36,1);}}
-    #fxs-hero{position:relative;padding:18px 18px 15px;flex-shrink:0;overflow:hidden;
-        border-bottom:1px solid var(--border-color);}
-    #fxs-hero::before{content:'';position:absolute;inset:0;pointer-events:none;
-        background:radial-gradient(460px 220px at 88% -40%,rgb(var(--accent-rgb) / .22),transparent 66%);}
-    #fxs-hero > *{position:relative;z-index:2;}
-    .fxs-eb{display:flex;align-items:center;gap:6px;font-size:8.5px;font-weight:900;letter-spacing:.15em;
-        text-transform:uppercase;color:rgb(var(--accent-rgb));margin-bottom:6px;}
-    .fxs-eb svg{width:12px;height:12px;}
-    #fxs-x{position:absolute;top:12px;right:12px;z-index:3;width:30px;height:30px;border-radius:99px;
-        display:flex;align-items:center;justify-content:center;font-size:19px;color:#9ca3af;}
-    #fxs-x:hover{color:#ef4444;background:rgba(239,68,68,.12);}
-    #fxs-body{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 20px;}
-    .fxs-master{display:flex;align-items:center;gap:11px;padding:13px;border-radius:15px;
-        border:1px solid var(--border-color);background:var(--bg-color);margin-bottom:6px;}
-    .fxs-master .fxs-i{width:34px;height:34px;border-radius:11px;flex-shrink:0;display:flex;
-        align-items:center;justify-content:center;color:#fff;background-image:var(--zd-grad);}
-    .fxs-master .fxs-i svg{width:17px;height:17px;}
-    .fxs-note{font-size:10px;color:#9ca3af;line-height:1.55;margin:9px 2px 16px;}
-    .fxs-lbl{display:flex;align-items:center;gap:7px;font-size:8.5px;font-weight:900;letter-spacing:.13em;
-        text-transform:uppercase;color:#9ca3af;margin:0 0 8px;}
-    .fxs-lbl::after{content:'';flex:1;height:1px;background:var(--border-color);opacity:.7;}
-    .fxs-row{display:flex;align-items:center;gap:10px;padding:9px 3px;border-bottom:1px solid var(--border-color);}
-    .fxs-row:last-child{border-bottom:none;}
-    .fxs-ico{width:28px;height:28px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;
-        justify-content:center;background:rgb(var(--accent-rgb) / .11);color:rgb(var(--accent-rgb));
-        transition:all .2s ease;}
-    .fxs-ico svg{width:15px;height:15px;}
-    .fxs-row.off .fxs-ico{background:rgba(127,127,127,.11);color:#9ca3af;}
-    .fxs-row.off .fxs-n{opacity:.5;}
-    .fxs-n b{display:block;font-size:12.5px;font-weight:700;color:var(--text-color);line-height:1.3;}
-    .fxs-n span{display:block;font-size:10px;color:#9ca3af;margin-top:1px;}
-    .fxs-sw{width:38px;height:22px;border-radius:99px;flex-shrink:0;position:relative;
-        background:rgba(127,127,127,.32);transition:background .2s ease;}
-    .fxs-sw.on{background-image:var(--zd-grad);}
-    .fxs-sw i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:99px;background:#fff;
-        transition:transform .22s cubic-bezier(.34,1.4,.5,1);box-shadow:0 1px 3px rgba(0,0,0,.32);}
-    .fxs-sw.on i{transform:translateX(16px);}
-    .fxs-sw[disabled]{opacity:.35;pointer-events:none;}
-    .fxs-try{flex-shrink:0;padding:5px 10px;border-radius:8px;font-size:9.5px;font-weight:800;
-        color:#9ca3af;background:var(--bg-color);border:1px solid var(--border-color);}
-    .fxs-try:hover{color:rgb(var(--accent-rgb));border-color:rgb(var(--accent-rgb));}
-    </style>`);
+//     document.head.insertAdjacentHTML('beforeend', `<style>
+//     #fxs{position:fixed;inset:0;z-index:129;display:none;align-items:flex-end;justify-content:center;
+//         background:rgba(4,6,11,.7);backdrop-filter:blur(9px);}
+//     #fxs.open{display:flex;animation:fadeIn .22s ease-out;}
+//     @media(min-width:640px){#fxs{align-items:center;padding:18px;}}
+//     #fxs-box{width:100%;max-width:440px;max-height:90vh;display:flex;flex-direction:column;
+//         background:var(--surface-color);border:1px solid var(--border-color);
+//         border-radius:22px 22px 0 0;overflow:hidden;box-shadow:0 -22px 64px rgba(0,0,0,.5);
+//         animation:dr2Up .4s cubic-bezier(.22,1,.36,1);}
+//     @media(min-width:640px){#fxs-box{border-radius:22px;animation:boxIn .34s cubic-bezier(.22,1,.36,1);}}
+//     #fxs-hero{position:relative;padding:18px 18px 15px;flex-shrink:0;overflow:hidden;
+//         border-bottom:1px solid var(--border-color);}
+//     #fxs-hero::before{content:'';position:absolute;inset:0;pointer-events:none;
+//         background:radial-gradient(460px 220px at 88% -40%,rgb(var(--accent-rgb) / .22),transparent 66%);}
+//     #fxs-hero > *{position:relative;z-index:2;}
+//     .fxs-eb{display:flex;align-items:center;gap:6px;font-size:8.5px;font-weight:900;letter-spacing:.15em;
+//         text-transform:uppercase;color:rgb(var(--accent-rgb));margin-bottom:6px;}
+//     .fxs-eb svg{width:12px;height:12px;}
+//     #fxs-x{position:absolute;top:12px;right:12px;z-index:3;width:30px;height:30px;border-radius:99px;
+//         display:flex;align-items:center;justify-content:center;font-size:19px;color:#9ca3af;}
+//     #fxs-x:hover{color:#ef4444;background:rgba(239,68,68,.12);}
+//     #fxs-body{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 20px;}
+//     .fxs-master{display:flex;align-items:center;gap:11px;padding:13px;border-radius:15px;
+//         border:1px solid var(--border-color);background:var(--bg-color);margin-bottom:6px;}
+//     .fxs-master .fxs-i{width:34px;height:34px;border-radius:11px;flex-shrink:0;display:flex;
+//         align-items:center;justify-content:center;color:#fff;background-image:var(--zd-grad);}
+//     .fxs-master .fxs-i svg{width:17px;height:17px;}
+//     .fxs-note{font-size:10px;color:#9ca3af;line-height:1.55;margin:9px 2px 16px;}
+//     .fxs-lbl{display:flex;align-items:center;gap:7px;font-size:8.5px;font-weight:900;letter-spacing:.13em;
+//         text-transform:uppercase;color:#9ca3af;margin:0 0 8px;}
+//     .fxs-lbl::after{content:'';flex:1;height:1px;background:var(--border-color);opacity:.7;}
+//     .fxs-row{display:flex;align-items:center;gap:10px;padding:9px 3px;border-bottom:1px solid var(--border-color);}
+//     .fxs-row:last-child{border-bottom:none;}
+//     .fxs-ico{width:28px;height:28px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;
+//         justify-content:center;background:rgb(var(--accent-rgb) / .11);color:rgb(var(--accent-rgb));
+//         transition:all .2s ease;}
+//     .fxs-ico svg{width:15px;height:15px;}
+//     .fxs-row.off .fxs-ico{background:rgba(127,127,127,.11);color:#9ca3af;}
+//     .fxs-row.off .fxs-n{opacity:.5;}
+//     .fxs-n b{display:block;font-size:12.5px;font-weight:700;color:var(--text-color);line-height:1.3;}
+//     .fxs-n span{display:block;font-size:10px;color:#9ca3af;margin-top:1px;}
+//     .fxs-sw{width:38px;height:22px;border-radius:99px;flex-shrink:0;position:relative;
+//         background:rgba(127,127,127,.32);transition:background .2s ease;}
+//     .fxs-sw.on{background-image:var(--zd-grad);}
+//     .fxs-sw i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:99px;background:#fff;
+//         transition:transform .22s cubic-bezier(.34,1.4,.5,1);box-shadow:0 1px 3px rgba(0,0,0,.32);}
+//     .fxs-sw.on i{transform:translateX(16px);}
+//     .fxs-sw[disabled]{opacity:.35;pointer-events:none;}
+//     .fxs-try{flex-shrink:0;padding:5px 10px;border-radius:8px;font-size:9.5px;font-weight:800;
+//         color:#9ca3af;background:var(--bg-color);border:1px solid var(--border-color);}
+//     .fxs-try:hover{color:rgb(var(--accent-rgb));border-color:rgb(var(--accent-rgb));}
+//     </style>`);
 
-    document.body.insertAdjacentHTML('beforeend', `
-    <div id="fxs"><div id="fxs-box">
-      <div id="fxs-hero">
-        <button id="fxs-x" onclick="closeMotion()">×</button>
-        <div class="fxs-eb"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg><span>Motion &amp; effects</span></div>
-        <div style="font-size:19px;font-weight:800;color:var(--text-color);line-height:1.2">Cinematic transitions</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:3px">Choose which sections get an entrance.</div>
-      </div>
-      <div id="fxs-body"></div>
-    </div></div>`);
+//     document.body.insertAdjacentHTML('beforeend', `
+//     <div id="fxs"><div id="fxs-box">
+//       <div id="fxs-hero">
+//         <button id="fxs-x" onclick="closeMotion()">×</button>
+//         <div class="fxs-eb"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg><span>Motion &amp; effects</span></div>
+//         <div style="font-size:19px;font-weight:800;color:var(--text-color);line-height:1.2">Cinematic transitions</div>
+//         <div style="font-size:11px;color:#9ca3af;margin-top:3px">Choose which sections get an entrance.</div>
+//       </div>
+//       <div id="fxs-body"></div>
+//     </div></div>`);
 
-    const $ = id => document.getElementById(id);
-    const read = () => { try { return JSON.parse(localStorage.getItem('zdFxSet') || '{}'); } catch (e) { return {}; } };
-    const write = v => localStorage.setItem('zdFxSet', JSON.stringify(v));
+//     const $ = id => document.getElementById(id);
+//     const read = () => { try { return JSON.parse(localStorage.getItem('zdFxSet') || '{}'); } catch (e) { return {}; } };
+//     const write = v => localStorage.setItem('zdFxSet', JSON.stringify(v));
 
-    /* the gate every effect patch calls */
-    window.zdFx = function (id) {
-        try {
-            if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return false;
-            const s = read();
-            if (s.master === false) return false;
-            return s[id] !== false;
-        } catch (e) { return true; }
-    };
-    window.zdFxSet = (id, on) => { const s = read(); s[id] = !!on; write(s); };
+//     /* the gate every effect patch calls */
+//     window.zdFx = function (id) {
+//         try {
+//             if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return false;
+//             const s = read();
+//             if (s.master === false) return false;
+//             return s[id] !== false;
+//         } catch (e) { return true; }
+//     };
+//     window.zdFxSet = (id, on) => { const s = read(); s[id] = !!on; write(s); };
 
-    window.openMotion = () => { render(); $('fxs').classList.add('open'); };
-    window.closeMotion = () => $('fxs').classList.remove('open');
-    window.fxToggle = (id) => {
-        const s = read();
-        s[id] = s[id] === false;
-        write(s);
-        render();
-        if (id === 'master') showToast(s.master === false ? 'All effects off — instant transitions.' : 'Effects on.');
-    };
-    window.fxTry = (id) => {
-        closeMotion();
-        const go = { theme: () => toggleTheme(), home: () => openHome(), today: () => openDailyNote(),
-            month: () => openCalendar(), board: () => openKanban(), canvas: () => openCanvas(),
-            tmpl: () => openTemplates(), matrix: () => openEisenhower(), graph: () => openGraph(),
-            grid: () => openTrackers(), meet: () => openMeeting(), edit: () => { try { zdUnsealNote(); } catch (e) {} },
-            loading: () => showToast('The loading screen plays on next launch.') }[id];
-        setTimeout(() => { try { go && go(); } catch (e) { showToast('That section is switched off.'); } }, 320);
-    };
+//     window.openMotion = () => { render(); $('fxs').classList.add('open'); };
+//     window.closeMotion = () => $('fxs').classList.remove('open');
+//     window.fxToggle = (id) => {
+//         const s = read();
+//         s[id] = s[id] === false;
+//         write(s);
+//         render();
+//         if (id === 'master') showToast(s.master === false ? 'All effects off — instant transitions.' : 'Effects on.');
+//     };
+//     window.fxTry = (id) => {
+//         closeMotion();
+//         const go = { theme: () => toggleTheme(), home: () => openHome(), today: () => openDailyNote(),
+//             month: () => openCalendar(), board: () => openKanban(), canvas: () => openCanvas(),
+//             tmpl: () => openTemplates(), matrix: () => openEisenhower(), graph: () => openGraph(),
+//             grid: () => openTrackers(), meet: () => openMeeting(), edit: () => { try { zdUnsealNote(); } catch (e) {} },
+//             loading: () => showToast('The loading screen plays on next launch.') }[id];
+//         setTimeout(() => { try { go && go(); } catch (e) { showToast('That section is switched off.'); } }, 320);
+//     };
 
-    function render() {
-        const s = read(), master = s.master !== false;
-        let h = `<div class="fxs-master">
-            <span class="fxs-i"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg></span>
-            <span class="fxs-n flex-1 min-w-0"><b>All effects</b><span>${master ? 'Transitions are playing' : 'Everything switches instantly'}</span></span>
-            <button class="fxs-sw ${master ? 'on' : ''}" onclick="fxToggle('master')"><i></i></button>
-          </div>
-          <div class="fxs-note">Effects are GPU-drawn and add roughly half a second when you open a section. Turning them off never changes what the section does. Your device's <b>Reduce Motion</b> setting is always respected.</div>
-          <div class="fxs-lbl"><span>Individual effects</span></div>`;
-        h += FX.map(([id, name, desc, ico]) => {
-            const on = master && s[id] !== false;
-            return `<div class="fxs-row ${on ? '' : 'off'}">
-                <span class="fxs-ico"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${ico}</svg></span>
-                <span class="fxs-n flex-1 min-w-0"><b>${name}</b><span>${desc}</span></span>
-                ${on ? `<button class="fxs-try" onclick="fxTry('${id}')">Play</button>` : ''}
-                <button class="fxs-sw ${on ? 'on' : ''}" ${master ? '' : 'disabled'} onclick="fxToggle('${id}')"><i></i></button>
-              </div>`;
-        }).join('');
-        $('fxs-body').innerHTML = h;
-    }
+//     function render() {
+//         const s = read(), master = s.master !== false;
+//         let h = `<div class="fxs-master">
+//             <span class="fxs-i"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg></span>
+//             <span class="fxs-n flex-1 min-w-0"><b>All effects</b><span>${master ? 'Transitions are playing' : 'Everything switches instantly'}</span></span>
+//             <button class="fxs-sw ${master ? 'on' : ''}" onclick="fxToggle('master')"><i></i></button>
+//           </div>
+//           <div class="fxs-note">Effects are GPU-drawn and add roughly half a second when you open a section. Turning them off never changes what the section does. Your device's <b>Reduce Motion</b> setting is always respected.</div>
+//           <div class="fxs-lbl"><span>Individual effects</span></div>`;
+//         h += FX.map(([id, name, desc, ico]) => {
+//             const on = master && s[id] !== false;
+//             return `<div class="fxs-row ${on ? '' : 'off'}">
+//                 <span class="fxs-ico"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${ico}</svg></span>
+//                 <span class="fxs-n flex-1 min-w-0"><b>${name}</b><span>${desc}</span></span>
+//                 ${on ? `<button class="fxs-try" onclick="fxTry('${id}')">Play</button>` : ''}
+//                 <button class="fxs-sw ${on ? 'on' : ''}" ${master ? '' : 'disabled'} onclick="fxToggle('${id}')"><i></i></button>
+//               </div>`;
+//         }).join('');
+//         $('fxs-body').innerHTML = h;
+//     }
 
-    $('fxs').addEventListener('click', e => { if (e.target.id === 'fxs') closeMotion(); });
-    window.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && $('fxs').classList.contains('open')) {
-            e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); closeMotion();
-        }
-    }, true);
+//     $('fxs').addEventListener('click', e => { if (e.target.id === 'fxs') closeMotion(); });
+//     window.addEventListener('keydown', e => {
+//         if (e.key === 'Escape' && $('fxs').classList.contains('open')) {
+//             e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); closeMotion();
+//         }
+//     }, true);
 
-    /* menu entry — deliberately NOT registered in ZD_FEATURES */
-    setTimeout(() => {
-        try { zdMenuInject2('motion', 'openMotion', 'Motion & effects',
-            '<path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/>'); } catch (e) {}
-        /* and a shortcut into it from the Features panel */
-        const f = document.getElementById('feat-list');
-        if (f && f.parentElement && !document.getElementById('fxs-jump')) {
-            const b = document.createElement('button');
-            b.id = 'fxs-jump';
-            b.className = 'w-full mt-3 py-2.5 text-xs font-bold rounded-xl';
-            b.style.cssText = 'background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color)';
-            b.innerHTML = '⚡ Motion &amp; effects settings →';
-            b.onclick = () => { try { closeFeatures(); } catch (e) {} setTimeout(openMotion, 200); };
-            f.parentElement.appendChild(b);
-        }
-    }, 900);
-})();    
+//     /* menu entry — deliberately NOT registered in ZD_FEATURES */
+//     setTimeout(() => {
+//         try { zdMenuInject2('motion', 'openMotion', 'Motion & effects',
+//             '<path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/>'); } catch (e) {}
+//         /* and a shortcut into it from the Features panel */
+//         const f = document.getElementById('feat-list');
+//         if (f && f.parentElement && !document.getElementById('fxs-jump')) {
+//             const b = document.createElement('button');
+//             b.id = 'fxs-jump';
+//             b.className = 'w-full mt-3 py-2.5 text-xs font-bold rounded-xl';
+//             b.style.cssText = 'background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-color)';
+//             b.innerHTML = '⚡ Motion &amp; effects settings →';
+//             b.onclick = () => { try { closeFeatures(); } catch (e) {} setTimeout(openMotion, 200); };
+//             f.parentElement.appendChild(b);
+//         }
+//     }, 900);
+// })();    
 
-    // New Code
-/* ============================================================
-   V9.9 — SIGNATURE EFFECTS v2  (replaces V9.8 entirely)
-   Ten layered, full-screen effects built the way the theme switch
-   is built: transparent over your live content, multiple synced
-   layers, real weight and follow-through.
-   • Fixes the doubled animation on Meeting mode and The Grid
-   • Adds a distinct "dispel" effect when you leave with Esc
-   Every effect is gated by V9.7's zdFx(id).
-============================================================ */
-(function zd99() {
-    if (window.__zd99) return; window.__zd99 = true;
+//     // New Code
+// /* ============================================================
+//    V9.9 — SIGNATURE EFFECTS v2  (replaces V9.8 entirely)
+//    Ten layered, full-screen effects built the way the theme switch
+//    is built: transparent over your live content, multiple synced
+//    layers, real weight and follow-through.
+//    • Fixes the doubled animation on Meeting mode and The Grid
+//    • Adds a distinct "dispel" effect when you leave with Esc
+//    Every effect is gated by V9.7's zdFx(id).
+// ============================================================ */
+// (function zd99() {
+//     if (window.__zd99) return; window.__zd99 = true;
 
-    /* ───────────────────────────────────────────────────────────
-       ⚙ CUSTOMISE
-       ─────────────────────────────────────────────────────────── */
-    const Z   = 1250;   // ⚙ effect length (ms) — the theme switch is 1500
-    const ZM  = 0.44;   // ⚙ when the section mounts (0–1 through the effect)
-    const ZE  = 620;    // ⚙ Esc "dispel" length (ms)
-    /* ─────────────────────────────────────────────────────────── */
+//     /* ───────────────────────────────────────────────────────────
+//        ⚙ CUSTOMISE
+//        ─────────────────────────────────────────────────────────── */
+//     const Z   = 1250;   // ⚙ effect length (ms) — the theme switch is 1500
+//     const ZM  = 0.44;   // ⚙ when the section mounts (0–1 through the effect)
+//     const ZE  = 620;    // ⚙ Esc "dispel" length (ms)
+//     /* ─────────────────────────────────────────────────────────── */
 
-    const mob = () => window.innerWidth < 620;
-    const tab = () => window.innerWidth < 1000;
+//     const mob = () => window.innerWidth < 620;
+//     const tab = () => window.innerWidth < 1000;
 
-    document.head.insertAdjacentHTML('beforeend', `<style>
-    /* ================= STAGE ================= */
-    #zfx{position:fixed;inset:0;z-index:197;display:none;overflow:hidden;pointer-events:none;contain:strict;}
-    #zfx.on{display:block;}
-    #zfx .zl{position:absolute;inset:0;}
+//     document.head.insertAdjacentHTML('beforeend', `<style>
+//     /* ================= STAGE ================= */
+//     #zfx{position:fixed;inset:0;z-index:197;display:none;overflow:hidden;pointer-events:none;contain:strict;}
+//     #zfx.on{display:block;}
+//     #zfx .zl{position:absolute;inset:0;}
 
-    /* ---- shared: atmosphere (the layer that does the crossfade) ---- */
-    .za{position:absolute;inset:-2px;opacity:0;will-change:opacity,transform;}
-    #zfx.in .za{animation:zaIn ${Z}ms cubic-bezier(.36,0,.28,1) forwards;}
-    #zfx.out .za{animation:zaOut ${Z}ms cubic-bezier(.4,0,.35,1) forwards;}
-    @keyframes zaIn{0%{opacity:0;transform:scale(1.06)}18%{opacity:.62}
-        42%{opacity:.92}56%{opacity:.86}100%{opacity:0;transform:scale(1)}}
-    @keyframes zaOut{0%{opacity:0}30%{opacity:.9}52%{opacity:.94}100%{opacity:0}}
+//     /* ---- shared: atmosphere (the layer that does the crossfade) ---- */
+//     .za{position:absolute;inset:-2px;opacity:0;will-change:opacity,transform;}
+//     #zfx.in .za{animation:zaIn ${Z}ms cubic-bezier(.36,0,.28,1) forwards;}
+//     #zfx.out .za{animation:zaOut ${Z}ms cubic-bezier(.4,0,.35,1) forwards;}
+//     @keyframes zaIn{0%{opacity:0;transform:scale(1.06)}18%{opacity:.62}
+//         42%{opacity:.92}56%{opacity:.86}100%{opacity:0;transform:scale(1)}}
+//     @keyframes zaOut{0%{opacity:0}30%{opacity:.9}52%{opacity:.94}100%{opacity:0}}
 
-    /* ---- shared: vignette that pulls the eye centre ---- */
-    .zv{position:absolute;inset:0;opacity:0;
-        background:radial-gradient(circle at 50% 50%,transparent 26%,rgba(0,0,0,.5) 92%);}
-    #zfx.in .zv{animation:zvIn ${Z}ms ease-out forwards;}
-    @keyframes zvIn{0%{opacity:0}26%{opacity:.85}62%{opacity:.5}100%{opacity:0}}
+//     /* ---- shared: vignette that pulls the eye centre ---- */
+//     .zv{position:absolute;inset:0;opacity:0;
+//         background:radial-gradient(circle at 50% 50%,transparent 26%,rgba(0,0,0,.5) 92%);}
+//     #zfx.in .zv{animation:zvIn ${Z}ms ease-out forwards;}
+//     @keyframes zvIn{0%{opacity:0}26%{opacity:.85}62%{opacity:.5}100%{opacity:0}}
 
-    /* ---- shared: bloom ---- */
-    .zb{position:absolute;inset:0;opacity:0;}
-    #zfx.in .zb{animation:zbIn ${Z}ms ease-out forwards;}
-    #zfx.out .zb{animation:zbOut ${Z}ms ease-in forwards;}
-    @keyframes zbIn{0%{opacity:0}24%{opacity:.9}40%{opacity:.34}100%{opacity:0}}
-    @keyframes zbOut{0%{opacity:0}50%{opacity:.8}100%{opacity:0}}
+//     /* ---- shared: bloom ---- */
+//     .zb{position:absolute;inset:0;opacity:0;}
+//     #zfx.in .zb{animation:zbIn ${Z}ms ease-out forwards;}
+//     #zfx.out .zb{animation:zbOut ${Z}ms ease-in forwards;}
+//     @keyframes zbIn{0%{opacity:0}24%{opacity:.9}40%{opacity:.34}100%{opacity:0}}
+//     @keyframes zbOut{0%{opacity:0}50%{opacity:.8}100%{opacity:0}}
 
-    /* ---- shared: shockwave ---- */
-    .zw{position:absolute;left:50%;top:50%;border-radius:99px;border:3px solid;
-        transform:translate(-50%,-50%);opacity:0;will-change:width,height,opacity;}
-    #zfx.in .zw{animation:zwIn ${Z}ms cubic-bezier(.14,.86,.28,1) both;}
-    #zfx.out .zw{animation:zwOut ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zwIn{0%{width:0;height:0;opacity:1;border-width:6px}
-        60%{opacity:.55}100%{width:250vmax;height:250vmax;opacity:0;border-width:0}}
-    @keyframes zwOut{0%{width:250vmax;height:250vmax;opacity:0;border-width:0}
-        100%{width:0;height:0;opacity:.95;border-width:6px}}
+//     /* ---- shared: shockwave ---- */
+//     .zw{position:absolute;left:50%;top:50%;border-radius:99px;border:3px solid;
+//         transform:translate(-50%,-50%);opacity:0;will-change:width,height,opacity;}
+//     #zfx.in .zw{animation:zwIn ${Z}ms cubic-bezier(.14,.86,.28,1) both;}
+//     #zfx.out .zw{animation:zwOut ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zwIn{0%{width:0;height:0;opacity:1;border-width:6px}
+//         60%{opacity:.55}100%{width:250vmax;height:250vmax;opacity:0;border-width:0}}
+//     @keyframes zwOut{0%{width:250vmax;height:250vmax;opacity:0;border-width:0}
+//         100%{width:0;height:0;opacity:.95;border-width:6px}}
 
-    /* ---- shared: streaks radiating out ---- */
-    .zs{position:absolute;left:50%;top:50%;width:2.5px;border-radius:99px;transform-origin:0 0;opacity:0;}
-    #zfx.in .zs{animation:zsIn ${Z}ms cubic-bezier(.2,.9,.3,1) both;}
-    @keyframes zsIn{0%{height:0;opacity:0}18%{opacity:1}52%{height:70vmax;opacity:.9}
-        100%{height:140vmax;opacity:0}}
+//     /* ---- shared: streaks radiating out ---- */
+//     .zs{position:absolute;left:50%;top:50%;width:2.5px;border-radius:99px;transform-origin:0 0;opacity:0;}
+//     #zfx.in .zs{animation:zsIn ${Z}ms cubic-bezier(.2,.9,.3,1) both;}
+//     @keyframes zsIn{0%{height:0;opacity:0}18%{opacity:1}52%{height:70vmax;opacity:.9}
+//         100%{height:140vmax;opacity:0}}
 
-    /* ================= 1 · CANVAS — lightning surge ================= */
-    .zc-bolt{position:absolute;inset:0;width:100%;height:100%;
-        filter:drop-shadow(0 0 7px #d6ecff) drop-shadow(0 0 26px #3d9cff);}
-    .zc-bolt path{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;}
-    .zc-h{stroke:rgba(110,185,255,.5);stroke-width:8;filter:blur(4px);}
-    .zc-c{stroke:#f4fbff;stroke-width:1.9;}
-    #zfx.in .zc-bolt path{animation:zcDraw ${Z}ms cubic-bezier(.15,.9,.25,1) both;}
-    #zfx.out .zc-bolt path{animation:zcDrawR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zcDraw{0%{stroke-dashoffset:1;opacity:0}8%{opacity:1}
-        22%{stroke-dashoffset:0}30%{opacity:.25}34%{opacity:1}
-        46%{opacity:.35}50%{opacity:1}70%{opacity:.9}100%{opacity:0;stroke-dashoffset:0}}
-    @keyframes zcDrawR{0%{stroke-dashoffset:0;opacity:0}30%{opacity:1}
-        66%{opacity:1;stroke-dashoffset:0}100%{stroke-dashoffset:1;opacity:0}}
-    .zc-arc{position:absolute;border-radius:99px;background:#eaf7ff;opacity:0;
-        box-shadow:0 0 16px 4px #6ab6ff;}
-    #zfx.in .zc-arc{animation:zcArc 240ms steps(2) both;}
-    @keyframes zcArc{0%{opacity:0}45%{opacity:1}100%{opacity:0}}
-    .zc-node{position:absolute;border-radius:99px;background:#fff;opacity:0;
-        box-shadow:0 0 20px 6px rgba(120,195,255,.9);transform:translate(-50%,-50%);}
-    #zfx.in .zc-node{animation:zcNode ${Z}ms cubic-bezier(.2,1.3,.4,1) both;}
-    @keyframes zcNode{0%{opacity:0;transform:translate(-50%,-50%) scale(0)}
-        24%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}
-        44%{transform:translate(-50%,-50%) scale(.8)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.6)}}
+//     /* ================= 1 · CANVAS — lightning surge ================= */
+//     .zc-bolt{position:absolute;inset:0;width:100%;height:100%;
+//         filter:drop-shadow(0 0 7px #d6ecff) drop-shadow(0 0 26px #3d9cff);}
+//     .zc-bolt path{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;}
+//     .zc-h{stroke:rgba(110,185,255,.5);stroke-width:8;filter:blur(4px);}
+//     .zc-c{stroke:#f4fbff;stroke-width:1.9;}
+//     #zfx.in .zc-bolt path{animation:zcDraw ${Z}ms cubic-bezier(.15,.9,.25,1) both;}
+//     #zfx.out .zc-bolt path{animation:zcDrawR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zcDraw{0%{stroke-dashoffset:1;opacity:0}8%{opacity:1}
+//         22%{stroke-dashoffset:0}30%{opacity:.25}34%{opacity:1}
+//         46%{opacity:.35}50%{opacity:1}70%{opacity:.9}100%{opacity:0;stroke-dashoffset:0}}
+//     @keyframes zcDrawR{0%{stroke-dashoffset:0;opacity:0}30%{opacity:1}
+//         66%{opacity:1;stroke-dashoffset:0}100%{stroke-dashoffset:1;opacity:0}}
+//     .zc-arc{position:absolute;border-radius:99px;background:#eaf7ff;opacity:0;
+//         box-shadow:0 0 16px 4px #6ab6ff;}
+//     #zfx.in .zc-arc{animation:zcArc 240ms steps(2) both;}
+//     @keyframes zcArc{0%{opacity:0}45%{opacity:1}100%{opacity:0}}
+//     .zc-node{position:absolute;border-radius:99px;background:#fff;opacity:0;
+//         box-shadow:0 0 20px 6px rgba(120,195,255,.9);transform:translate(-50%,-50%);}
+//     #zfx.in .zc-node{animation:zcNode ${Z}ms cubic-bezier(.2,1.3,.4,1) both;}
+//     @keyframes zcNode{0%{opacity:0;transform:translate(-50%,-50%) scale(0)}
+//         24%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}
+//         44%{transform:translate(-50%,-50%) scale(.8)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.6)}}
 
-    /* ================= 2 · HOME — wind shuriken ================= */
-    .zh-core{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
-        background:radial-gradient(circle at 42% 38%,#fff 0%,#c3e9ff 22%,#4aa8ff 52%,rgba(20,110,230,0) 76%);
-        box-shadow:0 0 80px 22px rgba(90,180,255,.55);will-change:width,height,opacity;}
-    #zfx.in .zh-core{animation:zhCore ${Z}ms cubic-bezier(.2,.9,.28,1) both;}
-    #zfx.out .zh-core{animation:zhCoreR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zhCore{0%{width:0;height:0;opacity:0}
-        20%{width:14vmin;height:14vmin;opacity:1}
-        42%{width:22vmin;height:22vmin}56%{width:20vmin;height:20vmin}
-        100%{width:220vmax;height:220vmax;opacity:0}}
-    @keyframes zhCoreR{0%{width:220vmax;height:220vmax;opacity:0}
-        52%{width:22vmin;height:22vmin;opacity:1}100%{width:0;height:0;opacity:0}}
-    .zh-fan{position:absolute;left:50%;top:50%;opacity:0;transform-origin:50% 50%;will-change:transform,opacity;}
-    #zfx.in .zh-fan{animation:zhFan ${Z}ms cubic-bezier(.16,.86,.26,1) both;}
-    #zfx.out .zh-fan{animation:zhFanR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zhFan{0%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.06)}
-        22%{opacity:1;transform:translate(-50%,-50%) rotate(340deg) scale(1)}
-        48%{transform:translate(-50%,-50%) rotate(760deg) scale(1.1)}
-        100%{opacity:0;transform:translate(-50%,-50%) rotate(1560deg) scale(5)}}
-    @keyframes zhFanR{0%{opacity:0;transform:translate(-50%,-50%) rotate(1560deg) scale(5)}
-        50%{opacity:1;transform:translate(-50%,-50%) rotate(340deg) scale(1)}
-        100%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.06)}}
-    .zh-blade{position:absolute;left:50%;top:50%;width:min(52vmin,400px);height:min(9vmin,66px);
-        margin:min(-4.5vmin,-33px) 0 0 min(-26vmin,-200px);border-radius:50%;
-        background:linear-gradient(90deg,rgba(140,215,255,0),rgba(215,242,255,.95) 46%,
-            #fff 50%,rgba(215,242,255,.95) 54%,rgba(140,215,255,0));
-        filter:blur(2px);}
-    .zh-ring{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);
-        border:1.5px solid rgba(190,232,255,.65);opacity:0;}
-    #zfx.in .zh-ring{animation:zhRing ${Z}ms cubic-bezier(.18,.9,.3,1) both;}
-    @keyframes zhRing{0%{width:0;height:0;opacity:0}22%{opacity:.95}
-        100%{width:180vmax;height:180vmax;opacity:0}}
+//     /* ================= 2 · HOME — wind shuriken ================= */
+//     .zh-core{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
+//         background:radial-gradient(circle at 42% 38%,#fff 0%,#c3e9ff 22%,#4aa8ff 52%,rgba(20,110,230,0) 76%);
+//         box-shadow:0 0 80px 22px rgba(90,180,255,.55);will-change:width,height,opacity;}
+//     #zfx.in .zh-core{animation:zhCore ${Z}ms cubic-bezier(.2,.9,.28,1) both;}
+//     #zfx.out .zh-core{animation:zhCoreR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zhCore{0%{width:0;height:0;opacity:0}
+//         20%{width:14vmin;height:14vmin;opacity:1}
+//         42%{width:22vmin;height:22vmin}56%{width:20vmin;height:20vmin}
+//         100%{width:220vmax;height:220vmax;opacity:0}}
+//     @keyframes zhCoreR{0%{width:220vmax;height:220vmax;opacity:0}
+//         52%{width:22vmin;height:22vmin;opacity:1}100%{width:0;height:0;opacity:0}}
+//     .zh-fan{position:absolute;left:50%;top:50%;opacity:0;transform-origin:50% 50%;will-change:transform,opacity;}
+//     #zfx.in .zh-fan{animation:zhFan ${Z}ms cubic-bezier(.16,.86,.26,1) both;}
+//     #zfx.out .zh-fan{animation:zhFanR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zhFan{0%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.06)}
+//         22%{opacity:1;transform:translate(-50%,-50%) rotate(340deg) scale(1)}
+//         48%{transform:translate(-50%,-50%) rotate(760deg) scale(1.1)}
+//         100%{opacity:0;transform:translate(-50%,-50%) rotate(1560deg) scale(5)}}
+//     @keyframes zhFanR{0%{opacity:0;transform:translate(-50%,-50%) rotate(1560deg) scale(5)}
+//         50%{opacity:1;transform:translate(-50%,-50%) rotate(340deg) scale(1)}
+//         100%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.06)}}
+//     .zh-blade{position:absolute;left:50%;top:50%;width:min(52vmin,400px);height:min(9vmin,66px);
+//         margin:min(-4.5vmin,-33px) 0 0 min(-26vmin,-200px);border-radius:50%;
+//         background:linear-gradient(90deg,rgba(140,215,255,0),rgba(215,242,255,.95) 46%,
+//             #fff 50%,rgba(215,242,255,.95) 54%,rgba(140,215,255,0));
+//         filter:blur(2px);}
+//     .zh-ring{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);
+//         border:1.5px solid rgba(190,232,255,.65);opacity:0;}
+//     #zfx.in .zh-ring{animation:zhRing ${Z}ms cubic-bezier(.18,.9,.3,1) both;}
+//     @keyframes zhRing{0%{width:0;height:0;opacity:0}22%{opacity:.95}
+//         100%{width:180vmax;height:180vmax;opacity:0}}
 
-    /* ================= 3 · TMPL — spiral sphere ================= */
-    .zt-sph{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
-        background:radial-gradient(circle at 36% 32%,#fff,#a9dcff 26%,#3f8ff5 58%,rgba(20,80,200,0) 78%);
-        box-shadow:inset 0 0 60px rgba(255,255,255,.75),0 0 90px 24px rgba(70,150,255,.5);
-        will-change:width,height,opacity;}
-    #zfx.in .zt-sph{animation:ztSph ${Z}ms cubic-bezier(.2,.88,.28,1) both;}
-    #zfx.out .zt-sph{animation:ztSphR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes ztSph{0%{width:0;height:0;opacity:0}
-        16%{width:8vmin;height:8vmin;opacity:1}
-        38%{width:24vmin;height:24vmin}54%{width:29vmin;height:29vmin}
-        100%{width:230vmax;height:230vmax;opacity:0}}
-    @keyframes ztSphR{0%{width:230vmax;height:230vmax;opacity:0}
-        50%{width:28vmin;height:28vmin;opacity:1}100%{width:0;height:0;opacity:0}}
-    .zt-sw{position:absolute;left:50%;top:50%;border-radius:50%;opacity:0;transform:translate(-50%,-50%);
-        border:2.5px solid rgba(210,240,255,.8);border-right-color:transparent;border-bottom-color:transparent;
-        will-change:transform,opacity;}
-    #zfx.in .zt-sw{animation:ztSw ${Z}ms cubic-bezier(.18,.88,.28,1) both;}
-    #zfx.out .zt-sw{animation:ztSwR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes ztSw{0%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.12)}
-        24%{opacity:1;transform:translate(-50%,-50%) rotate(420deg) scale(1)}
-        100%{opacity:0;transform:translate(-50%,-50%) rotate(1500deg) scale(4.6)}}
-    @keyframes ztSwR{0%{opacity:0;transform:translate(-50%,-50%) rotate(1500deg) scale(4.6)}
-        52%{opacity:1;transform:translate(-50%,-50%) rotate(420deg) scale(1)}
-        100%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.12)}}
-    .zt-flick{position:absolute;width:3px;height:3px;border-radius:99px;background:#e8f6ff;opacity:0;
-        box-shadow:0 0 10px 3px rgba(120,195,255,.85);}
-    #zfx.in .zt-flick{animation:ztFl ${Z}ms cubic-bezier(.3,.9,.4,1) both;}
-    @keyframes ztFl{0%{opacity:0;transform:translate(var(--fx),var(--fy)) scale(.2)}
-        30%{opacity:1;transform:translate(0,0) scale(1)}
-        62%{opacity:.7}100%{opacity:0;transform:translate(calc(var(--fx)*-2.4),calc(var(--fy)*-2.4)) scale(.3)}}
+//     /* ================= 3 · TMPL — spiral sphere ================= */
+//     .zt-sph{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
+//         background:radial-gradient(circle at 36% 32%,#fff,#a9dcff 26%,#3f8ff5 58%,rgba(20,80,200,0) 78%);
+//         box-shadow:inset 0 0 60px rgba(255,255,255,.75),0 0 90px 24px rgba(70,150,255,.5);
+//         will-change:width,height,opacity;}
+//     #zfx.in .zt-sph{animation:ztSph ${Z}ms cubic-bezier(.2,.88,.28,1) both;}
+//     #zfx.out .zt-sph{animation:ztSphR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes ztSph{0%{width:0;height:0;opacity:0}
+//         16%{width:8vmin;height:8vmin;opacity:1}
+//         38%{width:24vmin;height:24vmin}54%{width:29vmin;height:29vmin}
+//         100%{width:230vmax;height:230vmax;opacity:0}}
+//     @keyframes ztSphR{0%{width:230vmax;height:230vmax;opacity:0}
+//         50%{width:28vmin;height:28vmin;opacity:1}100%{width:0;height:0;opacity:0}}
+//     .zt-sw{position:absolute;left:50%;top:50%;border-radius:50%;opacity:0;transform:translate(-50%,-50%);
+//         border:2.5px solid rgba(210,240,255,.8);border-right-color:transparent;border-bottom-color:transparent;
+//         will-change:transform,opacity;}
+//     #zfx.in .zt-sw{animation:ztSw ${Z}ms cubic-bezier(.18,.88,.28,1) both;}
+//     #zfx.out .zt-sw{animation:ztSwR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes ztSw{0%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.12)}
+//         24%{opacity:1;transform:translate(-50%,-50%) rotate(420deg) scale(1)}
+//         100%{opacity:0;transform:translate(-50%,-50%) rotate(1500deg) scale(4.6)}}
+//     @keyframes ztSwR{0%{opacity:0;transform:translate(-50%,-50%) rotate(1500deg) scale(4.6)}
+//         52%{opacity:1;transform:translate(-50%,-50%) rotate(420deg) scale(1)}
+//         100%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.12)}}
+//     .zt-flick{position:absolute;width:3px;height:3px;border-radius:99px;background:#e8f6ff;opacity:0;
+//         box-shadow:0 0 10px 3px rgba(120,195,255,.85);}
+//     #zfx.in .zt-flick{animation:ztFl ${Z}ms cubic-bezier(.3,.9,.4,1) both;}
+//     @keyframes ztFl{0%{opacity:0;transform:translate(var(--fx),var(--fy)) scale(.2)}
+//         30%{opacity:1;transform:translate(0,0) scale(1)}
+//         62%{opacity:.7}100%{opacity:0;transform:translate(calc(var(--fx)*-2.4),calc(var(--fy)*-2.4)) scale(.3)}}
 
-    /* ================= 4 · BOARD — blade arcs ================= */
-    .zk-slash{position:absolute;left:50%;top:50%;width:300vmax;height:min(22vmin,170px);
-        margin-top:min(-11vmin,-85px);margin-left:-150vmax;transform-origin:50% 50%;opacity:0;
-        border-radius:50%;will-change:transform,opacity;
-        background:linear-gradient(90deg,rgba(255,140,40,0) 0%,rgba(255,186,80,.3) 26%,
-            rgba(255,240,196,.92) 47%,#fff 50%,rgba(255,240,196,.92) 53%,
-            rgba(255,160,52,.28) 74%,rgba(255,120,30,0) 100%);
-        filter:blur(2px);}
-    #zfx.in .zk-slash{animation:zkS ${Z}ms cubic-bezier(.14,.92,.22,1) both;}
-    #zfx.out .zk-slash{animation:zkSR ${Z}ms cubic-bezier(.55,0,.7,.3) both;}
-    @keyframes zkS{0%{opacity:0;transform:rotate(var(--a)) scaleX(0) scaleY(.28)}
-        14%{opacity:1;transform:rotate(var(--a)) scaleX(1) scaleY(1)}
-        44%{opacity:1;transform:rotate(var(--a)) scaleX(1) scaleY(1.2)}
-        100%{opacity:0;transform:rotate(var(--a)) scaleX(1) scaleY(3.4)}}
-    @keyframes zkSR{0%{opacity:0;transform:rotate(var(--a)) scaleX(1) scaleY(3.4)}
-        46%{opacity:1;transform:rotate(var(--a)) scaleX(1) scaleY(1)}
-        100%{opacity:0;transform:rotate(var(--a)) scaleX(0) scaleY(.28)}}
-    .zk-tear{position:absolute;left:50%;top:50%;width:300vmax;height:2px;margin-left:-150vmax;
-        transform-origin:50% 50%;opacity:0;background:#fff;
-        box-shadow:0 0 24px 6px rgba(255,214,140,.9);}
-    #zfx.in .zk-tear{animation:zkT ${Z}ms cubic-bezier(.1,.95,.2,1) both;}
-    @keyframes zkT{0%{opacity:0;transform:rotate(var(--a)) scaleX(0)}
-        10%{opacity:1;transform:rotate(var(--a)) scaleX(1)}
-        40%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) scaleX(1)}}
-    .zk-em{position:absolute;border-radius:99px;opacity:0;
-        background:radial-gradient(circle,#fff8e2,#ff9c3e 52%,rgba(255,120,30,0));}
-    #zfx.in .zk-em{animation:zkE ${Z}ms cubic-bezier(.22,.9,.4,1) both;}
-    @keyframes zkE{0%{opacity:0;transform:translate(0,0) scale(.2)}
-        18%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translate(var(--ex),var(--ey)) scale(.15)}}
+//     /* ================= 4 · BOARD — blade arcs ================= */
+//     .zk-slash{position:absolute;left:50%;top:50%;width:300vmax;height:min(22vmin,170px);
+//         margin-top:min(-11vmin,-85px);margin-left:-150vmax;transform-origin:50% 50%;opacity:0;
+//         border-radius:50%;will-change:transform,opacity;
+//         background:linear-gradient(90deg,rgba(255,140,40,0) 0%,rgba(255,186,80,.3) 26%,
+//             rgba(255,240,196,.92) 47%,#fff 50%,rgba(255,240,196,.92) 53%,
+//             rgba(255,160,52,.28) 74%,rgba(255,120,30,0) 100%);
+//         filter:blur(2px);}
+//     #zfx.in .zk-slash{animation:zkS ${Z}ms cubic-bezier(.14,.92,.22,1) both;}
+//     #zfx.out .zk-slash{animation:zkSR ${Z}ms cubic-bezier(.55,0,.7,.3) both;}
+//     @keyframes zkS{0%{opacity:0;transform:rotate(var(--a)) scaleX(0) scaleY(.28)}
+//         14%{opacity:1;transform:rotate(var(--a)) scaleX(1) scaleY(1)}
+//         44%{opacity:1;transform:rotate(var(--a)) scaleX(1) scaleY(1.2)}
+//         100%{opacity:0;transform:rotate(var(--a)) scaleX(1) scaleY(3.4)}}
+//     @keyframes zkSR{0%{opacity:0;transform:rotate(var(--a)) scaleX(1) scaleY(3.4)}
+//         46%{opacity:1;transform:rotate(var(--a)) scaleX(1) scaleY(1)}
+//         100%{opacity:0;transform:rotate(var(--a)) scaleX(0) scaleY(.28)}}
+//     .zk-tear{position:absolute;left:50%;top:50%;width:300vmax;height:2px;margin-left:-150vmax;
+//         transform-origin:50% 50%;opacity:0;background:#fff;
+//         box-shadow:0 0 24px 6px rgba(255,214,140,.9);}
+//     #zfx.in .zk-tear{animation:zkT ${Z}ms cubic-bezier(.1,.95,.2,1) both;}
+//     @keyframes zkT{0%{opacity:0;transform:rotate(var(--a)) scaleX(0)}
+//         10%{opacity:1;transform:rotate(var(--a)) scaleX(1)}
+//         40%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) scaleX(1)}}
+//     .zk-em{position:absolute;border-radius:99px;opacity:0;
+//         background:radial-gradient(circle,#fff8e2,#ff9c3e 52%,rgba(255,120,30,0));}
+//     #zfx.in .zk-em{animation:zkE ${Z}ms cubic-bezier(.22,.9,.4,1) both;}
+//     @keyframes zkE{0%{opacity:0;transform:translate(0,0) scale(.2)}
+//         18%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translate(var(--ex),var(--ey)) scale(.15)}}
 
-    /* ================= 5 · MONTH — all-seeing vision ================= */
-    .zn-iris{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
-        border:2px solid rgba(230,220,255,.9);
-        box-shadow:0 0 34px rgba(190,168,255,.6),inset 0 0 40px rgba(190,168,255,.32);}
-    #zfx.in .zn-iris{animation:znI ${Z}ms cubic-bezier(.14,.9,.26,1) both;}
-    #zfx.out .zn-iris{animation:znIR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes znI{0%{width:0;height:0;opacity:0}14%{opacity:1}100%{width:230vmax;height:230vmax;opacity:0}}
-    @keyframes znIR{0%{width:230vmax;height:230vmax;opacity:0}62%{opacity:1}100%{width:0;height:0;opacity:0}}
-    .zn-vein{position:absolute;left:50%;top:50%;height:1.6px;transform-origin:0 50%;opacity:0;
-        background:linear-gradient(90deg,rgba(238,230,255,.98),rgba(168,138,255,.4) 40%,transparent);}
-    #zfx.in .zn-vein{animation:znV ${Z}ms cubic-bezier(.18,.9,.3,1) both;}
-    @keyframes znV{0%{opacity:0;width:0}18%{opacity:1}56%{width:64vmax;opacity:.95}100%{width:96vmax;opacity:0}}
-    .zn-pupil{position:absolute;left:50%;top:50%;width:16vmin;height:16vmin;margin:-8vmin 0 0 -8vmin;
-        border-radius:99px;opacity:0;
-        background:radial-gradient(circle,#fff 0%,#f2ecff 28%,rgba(190,168,255,.4) 58%,transparent 78%);}
-    #zfx.in .zn-pupil{animation:znP ${Z}ms cubic-bezier(.2,1,.3,1) both;}
-    @keyframes znP{0%{opacity:0;transform:scale(.06)}
-        20%{opacity:1;transform:scale(1)}34%{transform:scale(.82)}44%{transform:scale(1.1)}
-        100%{opacity:0;transform:scale(11)}}
-    .zn-tom{position:absolute;left:50%;top:50%;width:min(34vmin,260px);height:min(34vmin,260px);
-        margin:min(-17vmin,-130px) 0 0 min(-17vmin,-130px);opacity:0;}
-    #zfx.in .zn-tom{animation:znT ${Z}ms cubic-bezier(.2,.9,.3,1) both;}
-    @keyframes znT{0%{opacity:0;transform:rotate(-90deg) scale(.2)}
-        24%{opacity:1;transform:rotate(90deg) scale(1)}
-        100%{opacity:0;transform:rotate(560deg) scale(4.2)}}
-    .zn-tom circle,.zn-tom path{fill:none;stroke:rgba(226,214,255,.85);stroke-width:1.4;
-        filter:drop-shadow(0 0 8px #b79bff);}
+//     /* ================= 5 · MONTH — all-seeing vision ================= */
+//     .zn-iris{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
+//         border:2px solid rgba(230,220,255,.9);
+//         box-shadow:0 0 34px rgba(190,168,255,.6),inset 0 0 40px rgba(190,168,255,.32);}
+//     #zfx.in .zn-iris{animation:znI ${Z}ms cubic-bezier(.14,.9,.26,1) both;}
+//     #zfx.out .zn-iris{animation:znIR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes znI{0%{width:0;height:0;opacity:0}14%{opacity:1}100%{width:230vmax;height:230vmax;opacity:0}}
+//     @keyframes znIR{0%{width:230vmax;height:230vmax;opacity:0}62%{opacity:1}100%{width:0;height:0;opacity:0}}
+//     .zn-vein{position:absolute;left:50%;top:50%;height:1.6px;transform-origin:0 50%;opacity:0;
+//         background:linear-gradient(90deg,rgba(238,230,255,.98),rgba(168,138,255,.4) 40%,transparent);}
+//     #zfx.in .zn-vein{animation:znV ${Z}ms cubic-bezier(.18,.9,.3,1) both;}
+//     @keyframes znV{0%{opacity:0;width:0}18%{opacity:1}56%{width:64vmax;opacity:.95}100%{width:96vmax;opacity:0}}
+//     .zn-pupil{position:absolute;left:50%;top:50%;width:16vmin;height:16vmin;margin:-8vmin 0 0 -8vmin;
+//         border-radius:99px;opacity:0;
+//         background:radial-gradient(circle,#fff 0%,#f2ecff 28%,rgba(190,168,255,.4) 58%,transparent 78%);}
+//     #zfx.in .zn-pupil{animation:znP ${Z}ms cubic-bezier(.2,1,.3,1) both;}
+//     @keyframes znP{0%{opacity:0;transform:scale(.06)}
+//         20%{opacity:1;transform:scale(1)}34%{transform:scale(.82)}44%{transform:scale(1.1)}
+//         100%{opacity:0;transform:scale(11)}}
+//     .zn-tom{position:absolute;left:50%;top:50%;width:min(34vmin,260px);height:min(34vmin,260px);
+//         margin:min(-17vmin,-130px) 0 0 min(-17vmin,-130px);opacity:0;}
+//     #zfx.in .zn-tom{animation:znT ${Z}ms cubic-bezier(.2,.9,.3,1) both;}
+//     @keyframes znT{0%{opacity:0;transform:rotate(-90deg) scale(.2)}
+//         24%{opacity:1;transform:rotate(90deg) scale(1)}
+//         100%{opacity:0;transform:rotate(560deg) scale(4.2)}}
+//     .zn-tom circle,.zn-tom path{fill:none;stroke:rgba(226,214,255,.85);stroke-width:1.4;
+//         filter:drop-shadow(0 0 8px #b79bff);}
 
-    /* ================= 6 · MATRIX — great fireball ================= */
-    .zm-fire{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
-        background:radial-gradient(circle at 44% 40%,#fffdf4 0%,#ffe58f 16%,#ffa338 40%,#f4451c 64%,rgba(140,18,0,0) 82%);
-        box-shadow:0 0 110px 34px rgba(255,120,30,.55);will-change:width,height,opacity;}
-    #zfx.in .zm-fire{animation:zmF ${Z}ms cubic-bezier(.2,.88,.3,1) both;}
-    #zfx.out .zm-fire{animation:zmFR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zmF{0%{width:0;height:0;opacity:0}
-        14%{width:6vmin;height:6vmin;opacity:1}
-        26%{width:11vmin;height:11vmin}
-        40%{width:34vmin;height:34vmin}52%{width:40vmin;height:40vmin}
-        100%{width:260vmax;height:260vmax;opacity:0}}
-    @keyframes zmFR{0%{width:260vmax;height:260vmax;opacity:0}
-        50%{width:36vmin;height:36vmin;opacity:1}100%{width:0;height:0;opacity:0}}
-    .zm-heat{position:absolute;inset:0;opacity:0;mix-blend-mode:overlay;
-        background:repeating-radial-gradient(circle at 50% 50%,rgba(255,186,90,.2) 0 9px,transparent 9px 20px);}
-    #zfx.in .zm-heat{animation:zmH ${Z}ms ease-out both;}
-    @keyframes zmH{0%{opacity:0;transform:scale(.3)}30%{opacity:.95}100%{opacity:0;transform:scale(3.2)}}
-    .zm-lick{position:absolute;left:50%;top:50%;transform-origin:0 0;opacity:0;
-        width:min(7vmin,52px);border-radius:99px 99px 40% 40%;
-        background:linear-gradient(180deg,rgba(255,236,170,.95),rgba(255,140,45,.55) 44%,rgba(240,70,20,0));
-        filter:blur(3px);}
-    #zfx.in .zm-lick{animation:zmL ${Z}ms cubic-bezier(.2,.9,.3,1) both;}
-    @keyframes zmL{0%{height:0;opacity:0}22%{opacity:1}
-        56%{height:56vmax;opacity:.85}100%{height:96vmax;opacity:0}}
+//     /* ================= 6 · MATRIX — great fireball ================= */
+//     .zm-fire{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
+//         background:radial-gradient(circle at 44% 40%,#fffdf4 0%,#ffe58f 16%,#ffa338 40%,#f4451c 64%,rgba(140,18,0,0) 82%);
+//         box-shadow:0 0 110px 34px rgba(255,120,30,.55);will-change:width,height,opacity;}
+//     #zfx.in .zm-fire{animation:zmF ${Z}ms cubic-bezier(.2,.88,.3,1) both;}
+//     #zfx.out .zm-fire{animation:zmFR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zmF{0%{width:0;height:0;opacity:0}
+//         14%{width:6vmin;height:6vmin;opacity:1}
+//         26%{width:11vmin;height:11vmin}
+//         40%{width:34vmin;height:34vmin}52%{width:40vmin;height:40vmin}
+//         100%{width:260vmax;height:260vmax;opacity:0}}
+//     @keyframes zmFR{0%{width:260vmax;height:260vmax;opacity:0}
+//         50%{width:36vmin;height:36vmin;opacity:1}100%{width:0;height:0;opacity:0}}
+//     .zm-heat{position:absolute;inset:0;opacity:0;mix-blend-mode:overlay;
+//         background:repeating-radial-gradient(circle at 50% 50%,rgba(255,186,90,.2) 0 9px,transparent 9px 20px);}
+//     #zfx.in .zm-heat{animation:zmH ${Z}ms ease-out both;}
+//     @keyframes zmH{0%{opacity:0;transform:scale(.3)}30%{opacity:.95}100%{opacity:0;transform:scale(3.2)}}
+//     .zm-lick{position:absolute;left:50%;top:50%;transform-origin:0 0;opacity:0;
+//         width:min(7vmin,52px);border-radius:99px 99px 40% 40%;
+//         background:linear-gradient(180deg,rgba(255,236,170,.95),rgba(255,140,45,.55) 44%,rgba(240,70,20,0));
+//         filter:blur(3px);}
+//     #zfx.in .zm-lick{animation:zmL ${Z}ms cubic-bezier(.2,.9,.3,1) both;}
+//     @keyframes zmL{0%{height:0;opacity:0}22%{opacity:1}
+//         56%{height:56vmax;opacity:.85}100%{height:96vmax;opacity:0}}
 
-    /* ================= 7 · GRAPH — living web ================= */
-    .zg-node{position:absolute;border-radius:99px;opacity:0;background:#fff;
-        box-shadow:0 0 22px 5px rgb(var(--accent-rgb) / .95);transform:translate(-50%,-50%);}
-    #zfx.in .zg-node{animation:zgN ${Z}ms cubic-bezier(.2,1.35,.4,1) both;}
-    #zfx.out .zg-node{animation:zgNR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zgN{0%{opacity:0;transform:translate(-50%,-50%) scale(0)}
-        26%{opacity:1;transform:translate(-50%,-50%) scale(1.35)}
-        40%{transform:translate(-50%,-50%) scale(.85)}
-        100%{opacity:0;transform:translate(-50%,-50%) scale(4)}}
-    @keyframes zgNR{0%{opacity:0;transform:translate(-50%,-50%) scale(4)}
-        54%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(0)}}
-    .zg-edge{position:absolute;height:2px;transform-origin:0 50%;opacity:0;
-        background:linear-gradient(90deg,rgb(var(--accent-rgb)),rgb(var(--accent-rgb) / .15));
-        box-shadow:0 0 10px rgb(var(--accent-rgb) / .7);}
-    #zfx.in .zg-edge{animation:zgE ${Z}ms cubic-bezier(.2,.95,.3,1) both;}
-    @keyframes zgE{0%{opacity:0;transform:scaleX(0)}
-        20%{opacity:1}38%{transform:scaleX(1)}64%{opacity:.85}100%{opacity:0;transform:scaleX(1)}}
-    .zg-pulse{position:absolute;width:7px;height:7px;border-radius:99px;background:#fff;opacity:0;
-        box-shadow:0 0 14px 4px rgb(var(--accent-rgb));transform-origin:0 50%;}
-    #zfx.in .zg-pulse{animation:zgP ${Z}ms cubic-bezier(.3,.7,.4,1) both;}
-    @keyframes zgP{0%,22%{opacity:0;transform:translateX(0) translateY(-50%)}
-        30%{opacity:1}70%{opacity:1;transform:translateX(var(--pl)) translateY(-50%)}
-        100%{opacity:0;transform:translateX(var(--pl)) translateY(-50%)}}
+//     /* ================= 7 · GRAPH — living web ================= */
+//     .zg-node{position:absolute;border-radius:99px;opacity:0;background:#fff;
+//         box-shadow:0 0 22px 5px rgb(var(--accent-rgb) / .95);transform:translate(-50%,-50%);}
+//     #zfx.in .zg-node{animation:zgN ${Z}ms cubic-bezier(.2,1.35,.4,1) both;}
+//     #zfx.out .zg-node{animation:zgNR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zgN{0%{opacity:0;transform:translate(-50%,-50%) scale(0)}
+//         26%{opacity:1;transform:translate(-50%,-50%) scale(1.35)}
+//         40%{transform:translate(-50%,-50%) scale(.85)}
+//         100%{opacity:0;transform:translate(-50%,-50%) scale(4)}}
+//     @keyframes zgNR{0%{opacity:0;transform:translate(-50%,-50%) scale(4)}
+//         54%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(0)}}
+//     .zg-edge{position:absolute;height:2px;transform-origin:0 50%;opacity:0;
+//         background:linear-gradient(90deg,rgb(var(--accent-rgb)),rgb(var(--accent-rgb) / .15));
+//         box-shadow:0 0 10px rgb(var(--accent-rgb) / .7);}
+//     #zfx.in .zg-edge{animation:zgE ${Z}ms cubic-bezier(.2,.95,.3,1) both;}
+//     @keyframes zgE{0%{opacity:0;transform:scaleX(0)}
+//         20%{opacity:1}38%{transform:scaleX(1)}64%{opacity:.85}100%{opacity:0;transform:scaleX(1)}}
+//     .zg-pulse{position:absolute;width:7px;height:7px;border-radius:99px;background:#fff;opacity:0;
+//         box-shadow:0 0 14px 4px rgb(var(--accent-rgb));transform-origin:0 50%;}
+//     #zfx.in .zg-pulse{animation:zgP ${Z}ms cubic-bezier(.3,.7,.4,1) both;}
+//     @keyframes zgP{0%,22%{opacity:0;transform:translateX(0) translateY(-50%)}
+//         30%{opacity:1}70%{opacity:1;transform:translateX(var(--pl)) translateY(-50%)}
+//         100%{opacity:0;transform:translateX(var(--pl)) translateY(-50%)}}
 
-    /* ================= 8 · MEETING — mind link ================= */
-    .zq-seal{position:absolute;left:50%;top:50%;width:min(38vmin,290px);height:min(38vmin,290px);
-        margin:min(-19vmin,-145px) 0 0 min(-19vmin,-145px);opacity:0;}
-    #zfx.in .zq-seal{animation:zqS ${Z}ms cubic-bezier(.2,1,.3,1) both;}
-    #zfx.out .zq-seal{animation:zqSR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zqS{0%{opacity:0;transform:rotate(-70deg) scale(.16)}
-        22%{opacity:1;transform:rotate(0) scale(1)}
-        42%{transform:rotate(0) scale(1.05)}
-        100%{opacity:0;transform:rotate(80deg) scale(4.4)}}
-    @keyframes zqSR{0%{opacity:0;transform:rotate(80deg) scale(4.4)}
-        52%{opacity:1;transform:rotate(0) scale(1)}100%{opacity:0;transform:rotate(-70deg) scale(.16)}}
-    .zq-seal circle,.zq-seal path,.zq-seal line{fill:none;stroke:#dccdff;stroke-width:1.5;
-        stroke-linecap:round;filter:drop-shadow(0 0 9px #a97dff);}
-    .zq-rip{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
-        border:2px solid rgba(200,174,255,.85);box-shadow:0 0 30px rgba(150,110,255,.6);}
-    #zfx.in .zq-rip{animation:zqR ${Z}ms cubic-bezier(.16,.88,.28,1) both;}
-    @keyframes zqR{0%{width:0;height:0;opacity:0}14%{opacity:1}100%{width:220vmax;height:220vmax;opacity:0}}
-    .zq-beam{position:absolute;left:50%;top:50%;width:min(11vmin,80px);border-radius:99px;opacity:0;
-        margin-left:min(-5.5vmin,-40px);transform-origin:50% 0;
-        background:linear-gradient(180deg,rgba(222,206,255,.95),rgba(150,110,255,.4) 44%,transparent);
-        filter:blur(3px);}
-    #zfx.in .zq-beam{animation:zqB ${Z}ms cubic-bezier(.22,.9,.3,1) both;}
-    @keyframes zqB{0%{opacity:0;height:0}26%{opacity:1}
-        56%{height:150vmax;opacity:.85}100%{height:190vmax;opacity:0}}
-    .zq-wave{position:absolute;left:0;right:0;height:1.4px;opacity:0;
-        background:linear-gradient(90deg,transparent,rgba(212,190,255,.9),transparent);}
-    #zfx.in .zq-wave{animation:zqW ${Z}ms cubic-bezier(.3,.8,.4,1) both;}
-    @keyframes zqW{0%{opacity:0;transform:scaleX(.1)}30%{opacity:.95;transform:scaleX(1)}
-        100%{opacity:0;transform:scaleX(1.2)}}
+//     /* ================= 8 · MEETING — mind link ================= */
+//     .zq-seal{position:absolute;left:50%;top:50%;width:min(38vmin,290px);height:min(38vmin,290px);
+//         margin:min(-19vmin,-145px) 0 0 min(-19vmin,-145px);opacity:0;}
+//     #zfx.in .zq-seal{animation:zqS ${Z}ms cubic-bezier(.2,1,.3,1) both;}
+//     #zfx.out .zq-seal{animation:zqSR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zqS{0%{opacity:0;transform:rotate(-70deg) scale(.16)}
+//         22%{opacity:1;transform:rotate(0) scale(1)}
+//         42%{transform:rotate(0) scale(1.05)}
+//         100%{opacity:0;transform:rotate(80deg) scale(4.4)}}
+//     @keyframes zqSR{0%{opacity:0;transform:rotate(80deg) scale(4.4)}
+//         52%{opacity:1;transform:rotate(0) scale(1)}100%{opacity:0;transform:rotate(-70deg) scale(.16)}}
+//     .zq-seal circle,.zq-seal path,.zq-seal line{fill:none;stroke:#dccdff;stroke-width:1.5;
+//         stroke-linecap:round;filter:drop-shadow(0 0 9px #a97dff);}
+//     .zq-rip{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);opacity:0;
+//         border:2px solid rgba(200,174,255,.85);box-shadow:0 0 30px rgba(150,110,255,.6);}
+//     #zfx.in .zq-rip{animation:zqR ${Z}ms cubic-bezier(.16,.88,.28,1) both;}
+//     @keyframes zqR{0%{width:0;height:0;opacity:0}14%{opacity:1}100%{width:220vmax;height:220vmax;opacity:0}}
+//     .zq-beam{position:absolute;left:50%;top:50%;width:min(11vmin,80px);border-radius:99px;opacity:0;
+//         margin-left:min(-5.5vmin,-40px);transform-origin:50% 0;
+//         background:linear-gradient(180deg,rgba(222,206,255,.95),rgba(150,110,255,.4) 44%,transparent);
+//         filter:blur(3px);}
+//     #zfx.in .zq-beam{animation:zqB ${Z}ms cubic-bezier(.22,.9,.3,1) both;}
+//     @keyframes zqB{0%{opacity:0;height:0}26%{opacity:1}
+//         56%{height:150vmax;opacity:.85}100%{height:190vmax;opacity:0}}
+//     .zq-wave{position:absolute;left:0;right:0;height:1.4px;opacity:0;
+//         background:linear-gradient(90deg,transparent,rgba(212,190,255,.9),transparent);}
+//     #zfx.in .zq-wave{animation:zqW ${Z}ms cubic-bezier(.3,.8,.4,1) both;}
+//     @keyframes zqW{0%{opacity:0;transform:scaleX(.1)}30%{opacity:.95;transform:scaleX(1)}
+//         100%{opacity:0;transform:scaleX(1.2)}}
 
-    /* ================= 9 · TODAY — sunrise ================= */
-    .zd-sun{position:absolute;left:50%;top:-18vmax;width:56vmax;height:56vmax;margin-left:-28vmax;
-        border-radius:99px;opacity:0;
-        background:radial-gradient(circle,#fffdf5 0%,#ffeab6 24%,rgba(255,200,96,.46) 52%,rgba(255,168,58,0) 76%);}
-    #zfx.in .zd-sun{animation:zdS ${Z}ms cubic-bezier(.2,1,.3,1) both;}
-    #zfx.out .zd-sun{animation:zdSR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
-    @keyframes zdS{0%{opacity:0;transform:scale(.28) translateY(38px)}
-        32%{opacity:1;transform:scale(1) translateY(0)}
-        56%{opacity:.85;transform:scale(1.14)}100%{opacity:0;transform:scale(1.5)}}
-    @keyframes zdSR{0%{opacity:0;transform:scale(1.5)}52%{opacity:1;transform:scale(1)}
-        100%{opacity:0;transform:scale(.28) translateY(38px)}}
-    .zd-fan{position:absolute;left:50%;top:-6%;width:0;height:0;transform-origin:0 0;}
-    #zfx.in .zd-fan{animation:zdF ${Z}ms cubic-bezier(.4,0,.6,1) both;}
-    @keyframes zdF{0%{transform:rotate(-8deg)}100%{transform:rotate(8deg)}}
-    .zd-ray{position:absolute;left:0;top:0;height:0;transform-origin:top center;opacity:0;
-        border-radius:50% 50% 46% 46%;mix-blend-mode:screen;filter:blur(8px);
-        background:linear-gradient(180deg,rgba(255,248,220,.95),rgba(255,218,148,.5) 26%,
-            rgba(255,188,92,.2) 58%,rgba(255,164,60,0) 88%);}
-    #zfx.in .zd-ray{animation:zdR ${Z}ms cubic-bezier(.14,.86,.26,1) both;}
-    @keyframes zdR{0%{height:0;opacity:0}12%{opacity:.32}28%{opacity:.78}
-        50%{height:180vmax;opacity:.66}68%{opacity:.36}100%{height:180vmax;opacity:0}}
-    .zd-flare{position:absolute;left:-20%;right:-20%;top:9%;height:3px;opacity:0;
-        background:linear-gradient(90deg,transparent,rgba(255,238,186,.9) 32%,#fff 50%,rgba(255,238,186,.9) 68%,transparent);
-        filter:blur(3px);}
-    #zfx.in .zd-flare{animation:zdFl ${Z}ms ease-out both;}
-    @keyframes zdFl{0%,14%{opacity:0;transform:scaleX(.15)}32%{opacity:.95;transform:scaleX(1)}
-        58%{opacity:.4}100%{opacity:0}}
-    .zd-mote{position:absolute;width:3px;height:3px;border-radius:99px;opacity:0;
-        background:rgba(255,244,210,.95);box-shadow:0 0 8px 2px rgba(255,216,142,.65);}
-    #zfx.in .zd-mote{animation:zdM ${Z}ms ease-out both;}
-    @keyframes zdM{0%{opacity:0;transform:translateY(24px) scale(.3)}
-        28%{opacity:.95;transform:translateY(0) scale(1)}
-        70%{opacity:.5;transform:translateY(-26px) scale(.9)}100%{opacity:0;transform:translateY(-52px) scale(.2)}}
+//     /* ================= 9 · TODAY — sunrise ================= */
+//     .zd-sun{position:absolute;left:50%;top:-18vmax;width:56vmax;height:56vmax;margin-left:-28vmax;
+//         border-radius:99px;opacity:0;
+//         background:radial-gradient(circle,#fffdf5 0%,#ffeab6 24%,rgba(255,200,96,.46) 52%,rgba(255,168,58,0) 76%);}
+//     #zfx.in .zd-sun{animation:zdS ${Z}ms cubic-bezier(.2,1,.3,1) both;}
+//     #zfx.out .zd-sun{animation:zdSR ${Z}ms cubic-bezier(.5,0,.7,.3) both;}
+//     @keyframes zdS{0%{opacity:0;transform:scale(.28) translateY(38px)}
+//         32%{opacity:1;transform:scale(1) translateY(0)}
+//         56%{opacity:.85;transform:scale(1.14)}100%{opacity:0;transform:scale(1.5)}}
+//     @keyframes zdSR{0%{opacity:0;transform:scale(1.5)}52%{opacity:1;transform:scale(1)}
+//         100%{opacity:0;transform:scale(.28) translateY(38px)}}
+//     .zd-fan{position:absolute;left:50%;top:-6%;width:0;height:0;transform-origin:0 0;}
+//     #zfx.in .zd-fan{animation:zdF ${Z}ms cubic-bezier(.4,0,.6,1) both;}
+//     @keyframes zdF{0%{transform:rotate(-8deg)}100%{transform:rotate(8deg)}}
+//     .zd-ray{position:absolute;left:0;top:0;height:0;transform-origin:top center;opacity:0;
+//         border-radius:50% 50% 46% 46%;mix-blend-mode:screen;filter:blur(8px);
+//         background:linear-gradient(180deg,rgba(255,248,220,.95),rgba(255,218,148,.5) 26%,
+//             rgba(255,188,92,.2) 58%,rgba(255,164,60,0) 88%);}
+//     #zfx.in .zd-ray{animation:zdR ${Z}ms cubic-bezier(.14,.86,.26,1) both;}
+//     @keyframes zdR{0%{height:0;opacity:0}12%{opacity:.32}28%{opacity:.78}
+//         50%{height:180vmax;opacity:.66}68%{opacity:.36}100%{height:180vmax;opacity:0}}
+//     .zd-flare{position:absolute;left:-20%;right:-20%;top:9%;height:3px;opacity:0;
+//         background:linear-gradient(90deg,transparent,rgba(255,238,186,.9) 32%,#fff 50%,rgba(255,238,186,.9) 68%,transparent);
+//         filter:blur(3px);}
+//     #zfx.in .zd-flare{animation:zdFl ${Z}ms ease-out both;}
+//     @keyframes zdFl{0%,14%{opacity:0;transform:scaleX(.15)}32%{opacity:.95;transform:scaleX(1)}
+//         58%{opacity:.4}100%{opacity:0}}
+//     .zd-mote{position:absolute;width:3px;height:3px;border-radius:99px;opacity:0;
+//         background:rgba(255,244,210,.95);box-shadow:0 0 8px 2px rgba(255,216,142,.65);}
+//     #zfx.in .zd-mote{animation:zdM ${Z}ms ease-out both;}
+//     @keyframes zdM{0%{opacity:0;transform:translateY(24px) scale(.3)}
+//         28%{opacity:.95;transform:translateY(0) scale(1)}
+//         70%{opacity:.5;transform:translateY(-26px) scale(.9)}100%{opacity:0;transform:translateY(-52px) scale(.2)}}
 
-    /* ================= 10 · DISPEL (Esc) ================= */
-    #zfx.esc .zl > *{animation:none!important;}
-    .ze-ring{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);
-        border:2.5px solid rgb(var(--accent-rgb) / .9);opacity:0;
-        box-shadow:0 0 34px rgb(var(--accent-rgb) / .65);}
-    #zfx.esc .ze-ring{animation:zeR ${ZE}ms cubic-bezier(.5,0,.25,1) both!important;}
-    @keyframes zeR{0%{width:190vmax;height:190vmax;opacity:0;border-width:1px}
-        26%{opacity:.95}72%{opacity:.85;border-width:3px}
-        100%{width:0;height:0;opacity:0;border-width:9px}}
-    .ze-shard{position:absolute;left:50%;top:50%;width:2.5px;border-radius:99px;transform-origin:0 0;opacity:0;
-        background:linear-gradient(180deg,rgb(var(--accent-rgb)),transparent);}
-    #zfx.esc .ze-shard{animation:zeS ${ZE}ms cubic-bezier(.45,0,.3,1) both!important;}
-    @keyframes zeS{0%{height:80vmax;opacity:0}20%{opacity:.9}100%{height:0;opacity:0}}
-    .ze-flash{position:absolute;inset:0;opacity:0;
-        background:radial-gradient(circle at 50% 50%,rgb(var(--accent-rgb) / .5),transparent 55%);}
-    #zfx.esc .ze-flash{animation:zeF ${ZE}ms ease-in both!important;}
-    @keyframes zeF{0%{opacity:0}70%{opacity:.5}88%{opacity:.9}100%{opacity:0}}
-    .ze-scan{position:absolute;left:0;right:0;height:2px;opacity:0;background:#fff;
-        box-shadow:0 0 26px 8px rgb(var(--accent-rgb) / .9);}
-    #zfx.esc .ze-scan{animation:zeSc ${ZE}ms cubic-bezier(.5,0,.3,1) both!important;}
-    @keyframes zeSc{0%{top:0;opacity:0}18%{opacity:1}82%{opacity:.8}100%{top:100%;opacity:0}}
+//     /* ================= 10 · DISPEL (Esc) ================= */
+//     #zfx.esc .zl > *{animation:none!important;}
+//     .ze-ring{position:absolute;left:50%;top:50%;border-radius:99px;transform:translate(-50%,-50%);
+//         border:2.5px solid rgb(var(--accent-rgb) / .9);opacity:0;
+//         box-shadow:0 0 34px rgb(var(--accent-rgb) / .65);}
+//     #zfx.esc .ze-ring{animation:zeR ${ZE}ms cubic-bezier(.5,0,.25,1) both!important;}
+//     @keyframes zeR{0%{width:190vmax;height:190vmax;opacity:0;border-width:1px}
+//         26%{opacity:.95}72%{opacity:.85;border-width:3px}
+//         100%{width:0;height:0;opacity:0;border-width:9px}}
+//     .ze-shard{position:absolute;left:50%;top:50%;width:2.5px;border-radius:99px;transform-origin:0 0;opacity:0;
+//         background:linear-gradient(180deg,rgb(var(--accent-rgb)),transparent);}
+//     #zfx.esc .ze-shard{animation:zeS ${ZE}ms cubic-bezier(.45,0,.3,1) both!important;}
+//     @keyframes zeS{0%{height:80vmax;opacity:0}20%{opacity:.9}100%{height:0;opacity:0}}
+//     .ze-flash{position:absolute;inset:0;opacity:0;
+//         background:radial-gradient(circle at 50% 50%,rgb(var(--accent-rgb) / .5),transparent 55%);}
+//     #zfx.esc .ze-flash{animation:zeF ${ZE}ms ease-in both!important;}
+//     @keyframes zeF{0%{opacity:0}70%{opacity:.5}88%{opacity:.9}100%{opacity:0}}
+//     .ze-scan{position:absolute;left:0;right:0;height:2px;opacity:0;background:#fff;
+//         box-shadow:0 0 26px 8px rgb(var(--accent-rgb) / .9);}
+//     #zfx.esc .ze-scan{animation:zeSc ${ZE}ms cubic-bezier(.5,0,.3,1) both!important;}
+//     @keyframes zeSc{0%{top:0;opacity:0}18%{opacity:1}82%{opacity:.8}100%{top:100%;opacity:0}}
 
-    /* ================= DOUBLE-EFFECT FIXES ================= */
-    /* V9.6's own shutter is retired — V9.9 owns the Meeting entrance */
-    #mt-fx{display:none!important;}
-    /* The Grid keeps ITS tunnel; V9.9 never adds a second effect there */
-    body.zfx-no-grid #trk-tunnel{display:none!important;}
-    /* tunnel polish */
-    #trk-tunnel .tn-r{box-shadow:0 0 36px rgb(var(--accent-rgb) / .65),
-        inset 0 0 50px rgb(var(--accent-rgb) / .24),0 0 100px rgb(var(--accent-rgb) / .22)!important;}
-    #trk-tunnel::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:5;
-        background:radial-gradient(circle at 50% 50%,transparent 30%,rgba(0,0,0,.66) 90%);}
-    #trk-tunnel .tn-lbl{text-shadow:0 0 24px rgb(var(--accent-rgb)),0 0 50px rgb(var(--accent-rgb) / .5)!important;}
+//     /* ================= DOUBLE-EFFECT FIXES ================= */
+//     /* V9.6's own shutter is retired — V9.9 owns the Meeting entrance */
+//     #mt-fx{display:none!important;}
+//     /* The Grid keeps ITS tunnel; V9.9 never adds a second effect there */
+//     body.zfx-no-grid #trk-tunnel{display:none!important;}
+//     /* tunnel polish */
+//     #trk-tunnel .tn-r{box-shadow:0 0 36px rgb(var(--accent-rgb) / .65),
+//         inset 0 0 50px rgb(var(--accent-rgb) / .24),0 0 100px rgb(var(--accent-rgb) / .22)!important;}
+//     #trk-tunnel::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:5;
+//         background:radial-gradient(circle at 50% 50%,transparent 30%,rgba(0,0,0,.66) 90%);}
+//     #trk-tunnel .tn-lbl{text-shadow:0 0 24px rgb(var(--accent-rgb)),0 0 50px rgb(var(--accent-rgb) / .5)!important;}
 
-    @media (prefers-reduced-motion:reduce){#zfx{display:none!important;}}
-    </style>`);
+//     @media (prefers-reduced-motion:reduce){#zfx{display:none!important;}}
+//     </style>`);
 
-    document.body.insertAdjacentHTML('beforeend', '<div id="zfx"><div class="zl" id="zfx-l"></div></div>');
-    const L = document.getElementById('zfx-l'), S = document.getElementById('zfx');
-    let busy = false;
+//     document.body.insertAdjacentHTML('beforeend', '<div id="zfx"><div class="zl" id="zfx-l"></div></div>');
+//     const L = document.getElementById('zfx-l'), S = document.getElementById('zfx');
+//     let busy = false;
 
-    /* ---------- helpers ---------- */
-    const rnd = (a, b) => a + Math.random() * (b - a);
-    function jag(x0, steps, spread) {
-        let x = x0, d = 'M' + x.toFixed(1) + ' 0';
-        for (let i = 1; i <= steps; i++) {
-            x = Math.max(2, Math.min(98, x + rnd(-spread, spread)));
-            d += ' L' + x.toFixed(1) + ' ' + (100 / steps * i).toFixed(1);
-        }
-        return d;
-    }
+//     /* ---------- helpers ---------- */
+//     const rnd = (a, b) => a + Math.random() * (b - a);
+//     function jag(x0, steps, spread) {
+//         let x = x0, d = 'M' + x.toFixed(1) + ' 0';
+//         for (let i = 1; i <= steps; i++) {
+//             x = Math.max(2, Math.min(98, x + rnd(-spread, spread)));
+//             d += ' L' + x.toFixed(1) + ' ' + (100 / steps * i).toFixed(1);
+//         }
+//         return d;
+//     }
 
-    /* ---------- builders ---------- */
-    const B = {
-        /* CANVAS — raw lightning across the whole frame */
-        canvas() {
-            const N = mob() ? 5 : tab() ? 7 : 10;
-            let p = '';
-            for (let i = 0; i < N; i++) {
-                const d = jag(6 + (i / N) * 88, 8, 13);
-                p += `<path class="zc-h" pathLength="1" d="${d}" style="animation-delay:${i * 30}ms"/>
-                      <path class="zc-c" pathLength="1" d="${d}" style="animation-delay:${i * 30}ms"/>`;
-            }
-            let a = '';
-            for (let i = 0; i < (mob() ? 12 : 26); i++) {
-                a += `<span class="zc-arc" style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(0, 100).toFixed(1)}%;
-                    width:${rnd(14, 76).toFixed(0)}px;height:2px;transform:rotate(${rnd(0, 180).toFixed(0)}deg);
-                    animation-delay:${Math.round(rnd(60, Z * .58))}ms"></span>`;
-            }
-            let n = '';
-            for (let i = 0; i < (mob() ? 6 : 11); i++) {
-                const s = rnd(5, 13);
-                n += `<span class="zc-node" style="left:${rnd(8, 92).toFixed(1)}%;top:${rnd(8, 92).toFixed(1)}%;
-                    width:${s.toFixed(0)}px;height:${s.toFixed(0)}px;animation-delay:${Math.round(rnd(80, Z * .4))}ms"></span>`;
-            }
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(8,18,38,.5),rgba(6,14,32,.28))"></div>
-                <div class="zb" style="background:radial-gradient(circle at 50% 42%,#e8f6ff,rgba(80,170,255,.4) 42%,transparent 74%)"></div>
-                <svg class="zc-bolt" viewBox="0 0 100 100" preserveAspectRatio="none">${p}</svg>
-                ${a}${n}<div class="zv"></div>
-                <span class="zw" style="border-color:rgba(160,215,255,.9)"></span>
-                <span class="zw" style="border-color:rgba(90,170,255,.5);animation-delay:130ms"></span>`;
-        },
-        /* HOME — wind shuriken opening the hub */
-        home() {
-            let bl = '';
-            for (let i = 0; i < 4; i++) bl += `<span class="zh-blade" style="transform:rotate(${i * 45}deg)"></span>`;
-            let st = '';
-            const N = mob() ? 14 : 24;
-            for (let i = 0; i < N; i++)
-                st += `<span class="zs" style="transform:rotate(${(i * 360 / N).toFixed(1)}deg);
-                    background:linear-gradient(180deg,rgba(200,238,255,.9),transparent);
-                    animation-delay:${i * 14}ms"></span>`;
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(10,26,48,.44),rgba(6,18,38,.24))"></div>
-                <div class="zb" style="background:radial-gradient(circle,#e2f2ff,rgba(80,170,255,.34) 44%,transparent 72%)"></div>
-                ${st}<span class="zh-core"></span><span class="zh-fan">${bl}</span>
-                <span class="zh-ring"></span><span class="zh-ring" style="animation-delay:120ms"></span>
-                <div class="zv"></div><span class="zw" style="border-color:rgba(170,220,255,.85)"></span>`;
-        },
-        /* TMPL — a spiral forming into shape */
-        tmpl() {
-            let s = '';
-            for (let i = 0; i < 5; i++)
-                s += `<span class="zt-sw" style="width:${(13 + i * 8)}vmin;height:${(13 + i * 8)}vmin;
-                    animation-delay:${i * 38}ms;border-width:${(2.6 - i * .3).toFixed(1)}px"></span>`;
-            let f = '';
-            for (let i = 0; i < (mob() ? 14 : 28); i++) {
-                const a = rnd(0, 360) * Math.PI / 180, d = rnd(22, 58);
-                f += `<span class="zt-flick" style="left:50%;top:50%;
-                    --fx:${(Math.cos(a) * d).toFixed(1)}vmin;--fy:${(Math.sin(a) * d).toFixed(1)}vmin;
-                    animation-delay:${Math.round(rnd(0, Z * .34))}ms"></span>`;
-            }
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(8,22,46,.46),rgba(6,16,36,.26))"></div>
-                <div class="zb" style="background:radial-gradient(circle,#eaf5ff,rgba(70,150,255,.34) 44%,transparent 74%)"></div>
-                ${f}<span class="zt-sph"></span>${s}
-                <div class="zv"></div><span class="zw" style="border-color:rgba(160,212,255,.85)"></span>`;
-        },
-        /* BOARD — decisive blade arcs */
-        board() {
-            let e = '';
-            for (let i = 0; i < (mob() ? 16 : 34); i++) {
-                const sz = rnd(3, 9);
-                e += `<span class="zk-em" style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(32, 70).toFixed(1)}%;
-                    width:${sz.toFixed(0)}px;height:${sz.toFixed(0)}px;
-                    --ex:${rnd(-30, 30).toFixed(0)}vw;--ey:${rnd(-46, -18).toFixed(0)}vh;
-                    animation-delay:${Math.round(rnd(Z * .1, Z * .5))}ms"></span>`;
-            }
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(38,14,4,.46),rgba(24,8,2,.26))"></div>
-                <div class="zb" style="background:radial-gradient(circle at 50% 50%,#fff3d8,rgba(255,140,40,.34) 42%,transparent 74%)"></div>
-                <span class="zk-tear" style="--a:-27deg"></span>
-                <span class="zk-slash" style="--a:-27deg"></span>
-                <span class="zk-tear" style="--a:19deg;animation-delay:150ms"></span>
-                <span class="zk-slash" style="--a:19deg;animation-delay:150ms;opacity:.85"></span>
-                <span class="zk-slash" style="--a:-62deg;animation-delay:290ms;opacity:.5"></span>
-                ${e}<div class="zv"></div>
-                <span class="zw" style="border-color:rgba(255,196,116,.9)"></span>`;
-        },
-        /* MONTH — seeing the whole month at once */
-        month() {
-            const N = mob() ? 18 : 34;
-            let v = '', ir = '';
-            for (let i = 0; i < N; i++)
-                v += `<span class="zn-vein" style="transform:rotate(${(i * 360 / N).toFixed(1)}deg);
-                    animation-delay:${i * 10}ms"></span>`;
-            for (let i = 0; i < 5; i++)
-                ir += `<span class="zn-iris" style="animation-delay:${i * 82}ms"></span>`;
-            let tom = '<circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="33"/><circle cx="50" cy="50" r="19"/>';
-            for (let i = 0; i < 3; i++) {
-                const a = i * 120 * Math.PI / 180;
-                tom += `<circle cx="${(50 + Math.cos(a) * 33).toFixed(1)}" cy="${(50 + Math.sin(a) * 33).toFixed(1)}" r="5"/>`;
-            }
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(20,10,42,.48),rgba(12,6,30,.28))"></div>
-                <div class="zb" style="background:radial-gradient(circle,#f6f2ff,rgba(170,140,255,.32) 44%,transparent 76%)"></div>
-                ${v}<svg class="zn-tom" viewBox="0 0 100 100">${tom}</svg>
-                <span class="zn-pupil"></span>${ir}<div class="zv"></div>`;
-        },
-        /* MATRIX — the fireball that clears the board */
-        matrix() {
-            let lk = '';
-            const N = mob() ? 10 : 18;
-            for (let i = 0; i < N; i++)
-                lk += `<span class="zm-lick" style="transform:rotate(${(i * 360 / N + rnd(-8, 8)).toFixed(1)}deg);
-                    animation-delay:${Math.round(rnd(Z * .16, Z * .4))}ms"></span>`;
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(44,12,2,.5),rgba(26,6,0,.28))"></div>
-                <div class="zb" style="background:radial-gradient(circle,#fff6e0,rgba(255,110,30,.42) 40%,transparent 74%)"></div>
-                <span class="zm-heat"></span>${lk}<span class="zm-fire"></span>
-                <div class="zv"></div>
-                <span class="zw" style="border-color:rgba(255,178,88,.95)"></span>
-                <span class="zw" style="border-color:rgba(255,110,36,.6);animation-delay:140ms"></span>`;
-        },
-        /* GRAPH — the web wakes up and signals travel it */
-        graph() {
-            const N = mob() ? 11 : tab() ? 15 : 20, pts = [];
-            let h = '';
-            for (let i = 0; i < N; i++) {
-                const a = (i / N) * Math.PI * 2 + rnd(-.25, .25), r = rnd(13, 34);
-                const x = 50 + Math.cos(a) * r, y = 50 + Math.sin(a) * r * .82;
-                pts.push([x, y]);
-                const s = rnd(7, 19);
-                h += `<span class="zg-node" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;
-                    width:${s.toFixed(0)}px;height:${s.toFixed(0)}px;animation-delay:${i * 20}ms"></span>`;
-            }
-            pts.forEach(([x, y], i) => {
-                [1, 2].forEach((off, j) => {
-                    const [x2, y2] = pts[(i + off + j) % N];
-                    const dx = (x2 - x) / 100 * window.innerWidth, dy = (y2 - y) / 100 * window.innerHeight;
-                    const len = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
-                    h += `<span class="zg-edge" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;
-                        width:${len.toFixed(0)}px;transform:rotate(${ang.toFixed(1)}deg);
-                        animation-delay:${i * 20 + 40}ms"></span>`;
-                    if (j === 0 && i % 2 === 0)
-                        h += `<span class="zg-pulse" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;
-                            --pl:${len.toFixed(0)}px;transform:rotate(${ang.toFixed(1)}deg);
-                            animation-delay:${i * 20 + 90}ms"></span>`;
-                });
-            });
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(6,14,30,.46),rgba(4,10,24,.26))"></div>
-                <div class="zb" style="background:radial-gradient(circle,rgb(var(--accent-rgb) / .5),transparent 62%)"></div>
-                ${h}<div class="zv"></div>
-                <span class="zw" style="border-color:rgb(var(--accent-rgb) / .85)"></span>`;
-        },
-        /* MEETING — minds linking */
-        meet() {
-            let r = '', b = '', w = '';
-            for (let i = 0; i < 6; i++) r += `<span class="zq-rip" style="animation-delay:${i * 72}ms"></span>`;
-            for (let i = 0; i < 5; i++)
-                b += `<span class="zq-beam" style="transform:rotate(${((i - 2) * 26).toFixed(0)}deg);
-                    animation-delay:${i * 52}ms"></span>`;
-            for (let i = 0; i < (mob() ? 5 : 9); i++)
-                w += `<span class="zq-wave" style="top:${(12 + i * 9.5).toFixed(1)}%;
-                    animation-delay:${Math.round(rnd(0, Z * .4))}ms"></span>`;
-            let seal = '<circle cx="50" cy="50" r="47"/><circle cx="50" cy="50" r="36"/><circle cx="50" cy="50" r="12"/>'
-                + '<path d="M50 3 L91 74 L9 74 Z"/><path d="M50 97 L9 26 L91 26 Z"/>';
-            for (let i = 0; i < 8; i++) {
-                const a = i * 45 * Math.PI / 180;
-                seal += `<line x1="${(50 + Math.cos(a) * 36).toFixed(1)}" y1="${(50 + Math.sin(a) * 36).toFixed(1)}"
-                    x2="${(50 + Math.cos(a) * 47).toFixed(1)}" y2="${(50 + Math.sin(a) * 47).toFixed(1)}"/>`;
-            }
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(18,8,42,.5),rgba(10,4,28,.28))"></div>
-                <div class="zb" style="background:radial-gradient(circle,#f2eaff,rgba(150,110,255,.34) 42%,transparent 74%)"></div>
-                ${w}${b}<svg class="zq-seal" viewBox="0 0 100 100">${seal}</svg>${r}<div class="zv"></div>`;
-        },
-        /* TODAY — sunrise over the page */
-        today() {
-            const N = mob() ? 13 : 21;
-            let rays = '', motes = '';
-            for (let i = 0; i < N; i++) {
-                const a = -80 + (i / (N - 1)) * 160 + rnd(-4, 4), w = rnd(26, 74);
-                rays += `<span class="zd-ray" style="width:${w.toFixed(0)}px;margin-left:${(-w / 2).toFixed(0)}px;
-                    transform:rotate(${a.toFixed(1)}deg);animation-delay:${Math.round(Math.abs(a) * 2.2 + rnd(0, 60))}ms"></span>`;
-            }
-            for (let i = 0; i < (mob() ? 11 : 22); i++)
-                motes += `<span class="zd-mote" style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(12, 84).toFixed(1)}%;
-                    animation-delay:${Math.round(rnd(Z * .18, Z * .55))}ms"></span>`;
-            return `<div class="za" style="background:linear-gradient(180deg,rgba(255,214,140,.34),rgba(255,180,90,.14))"></div>
-                <span class="zd-sun"></span><span class="zd-flare"></span>
-                <span class="zd-fan">${rays}</span>${motes}
-                <span class="zw" style="border-color:rgba(255,214,140,.8)"></span>`;
-        }
-    };
+//     /* ---------- builders ---------- */
+//     const B = {
+//         /* CANVAS — raw lightning across the whole frame */
+//         canvas() {
+//             const N = mob() ? 5 : tab() ? 7 : 10;
+//             let p = '';
+//             for (let i = 0; i < N; i++) {
+//                 const d = jag(6 + (i / N) * 88, 8, 13);
+//                 p += `<path class="zc-h" pathLength="1" d="${d}" style="animation-delay:${i * 30}ms"/>
+//                       <path class="zc-c" pathLength="1" d="${d}" style="animation-delay:${i * 30}ms"/>`;
+//             }
+//             let a = '';
+//             for (let i = 0; i < (mob() ? 12 : 26); i++) {
+//                 a += `<span class="zc-arc" style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(0, 100).toFixed(1)}%;
+//                     width:${rnd(14, 76).toFixed(0)}px;height:2px;transform:rotate(${rnd(0, 180).toFixed(0)}deg);
+//                     animation-delay:${Math.round(rnd(60, Z * .58))}ms"></span>`;
+//             }
+//             let n = '';
+//             for (let i = 0; i < (mob() ? 6 : 11); i++) {
+//                 const s = rnd(5, 13);
+//                 n += `<span class="zc-node" style="left:${rnd(8, 92).toFixed(1)}%;top:${rnd(8, 92).toFixed(1)}%;
+//                     width:${s.toFixed(0)}px;height:${s.toFixed(0)}px;animation-delay:${Math.round(rnd(80, Z * .4))}ms"></span>`;
+//             }
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(8,18,38,.5),rgba(6,14,32,.28))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle at 50% 42%,#e8f6ff,rgba(80,170,255,.4) 42%,transparent 74%)"></div>
+//                 <svg class="zc-bolt" viewBox="0 0 100 100" preserveAspectRatio="none">${p}</svg>
+//                 ${a}${n}<div class="zv"></div>
+//                 <span class="zw" style="border-color:rgba(160,215,255,.9)"></span>
+//                 <span class="zw" style="border-color:rgba(90,170,255,.5);animation-delay:130ms"></span>`;
+//         },
+//         /* HOME — wind shuriken opening the hub */
+//         home() {
+//             let bl = '';
+//             for (let i = 0; i < 4; i++) bl += `<span class="zh-blade" style="transform:rotate(${i * 45}deg)"></span>`;
+//             let st = '';
+//             const N = mob() ? 14 : 24;
+//             for (let i = 0; i < N; i++)
+//                 st += `<span class="zs" style="transform:rotate(${(i * 360 / N).toFixed(1)}deg);
+//                     background:linear-gradient(180deg,rgba(200,238,255,.9),transparent);
+//                     animation-delay:${i * 14}ms"></span>`;
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(10,26,48,.44),rgba(6,18,38,.24))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle,#e2f2ff,rgba(80,170,255,.34) 44%,transparent 72%)"></div>
+//                 ${st}<span class="zh-core"></span><span class="zh-fan">${bl}</span>
+//                 <span class="zh-ring"></span><span class="zh-ring" style="animation-delay:120ms"></span>
+//                 <div class="zv"></div><span class="zw" style="border-color:rgba(170,220,255,.85)"></span>`;
+//         },
+//         /* TMPL — a spiral forming into shape */
+//         tmpl() {
+//             let s = '';
+//             for (let i = 0; i < 5; i++)
+//                 s += `<span class="zt-sw" style="width:${(13 + i * 8)}vmin;height:${(13 + i * 8)}vmin;
+//                     animation-delay:${i * 38}ms;border-width:${(2.6 - i * .3).toFixed(1)}px"></span>`;
+//             let f = '';
+//             for (let i = 0; i < (mob() ? 14 : 28); i++) {
+//                 const a = rnd(0, 360) * Math.PI / 180, d = rnd(22, 58);
+//                 f += `<span class="zt-flick" style="left:50%;top:50%;
+//                     --fx:${(Math.cos(a) * d).toFixed(1)}vmin;--fy:${(Math.sin(a) * d).toFixed(1)}vmin;
+//                     animation-delay:${Math.round(rnd(0, Z * .34))}ms"></span>`;
+//             }
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(8,22,46,.46),rgba(6,16,36,.26))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle,#eaf5ff,rgba(70,150,255,.34) 44%,transparent 74%)"></div>
+//                 ${f}<span class="zt-sph"></span>${s}
+//                 <div class="zv"></div><span class="zw" style="border-color:rgba(160,212,255,.85)"></span>`;
+//         },
+//         /* BOARD — decisive blade arcs */
+//         board() {
+//             let e = '';
+//             for (let i = 0; i < (mob() ? 16 : 34); i++) {
+//                 const sz = rnd(3, 9);
+//                 e += `<span class="zk-em" style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(32, 70).toFixed(1)}%;
+//                     width:${sz.toFixed(0)}px;height:${sz.toFixed(0)}px;
+//                     --ex:${rnd(-30, 30).toFixed(0)}vw;--ey:${rnd(-46, -18).toFixed(0)}vh;
+//                     animation-delay:${Math.round(rnd(Z * .1, Z * .5))}ms"></span>`;
+//             }
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(38,14,4,.46),rgba(24,8,2,.26))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle at 50% 50%,#fff3d8,rgba(255,140,40,.34) 42%,transparent 74%)"></div>
+//                 <span class="zk-tear" style="--a:-27deg"></span>
+//                 <span class="zk-slash" style="--a:-27deg"></span>
+//                 <span class="zk-tear" style="--a:19deg;animation-delay:150ms"></span>
+//                 <span class="zk-slash" style="--a:19deg;animation-delay:150ms;opacity:.85"></span>
+//                 <span class="zk-slash" style="--a:-62deg;animation-delay:290ms;opacity:.5"></span>
+//                 ${e}<div class="zv"></div>
+//                 <span class="zw" style="border-color:rgba(255,196,116,.9)"></span>`;
+//         },
+//         /* MONTH — seeing the whole month at once */
+//         month() {
+//             const N = mob() ? 18 : 34;
+//             let v = '', ir = '';
+//             for (let i = 0; i < N; i++)
+//                 v += `<span class="zn-vein" style="transform:rotate(${(i * 360 / N).toFixed(1)}deg);
+//                     animation-delay:${i * 10}ms"></span>`;
+//             for (let i = 0; i < 5; i++)
+//                 ir += `<span class="zn-iris" style="animation-delay:${i * 82}ms"></span>`;
+//             let tom = '<circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="33"/><circle cx="50" cy="50" r="19"/>';
+//             for (let i = 0; i < 3; i++) {
+//                 const a = i * 120 * Math.PI / 180;
+//                 tom += `<circle cx="${(50 + Math.cos(a) * 33).toFixed(1)}" cy="${(50 + Math.sin(a) * 33).toFixed(1)}" r="5"/>`;
+//             }
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(20,10,42,.48),rgba(12,6,30,.28))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle,#f6f2ff,rgba(170,140,255,.32) 44%,transparent 76%)"></div>
+//                 ${v}<svg class="zn-tom" viewBox="0 0 100 100">${tom}</svg>
+//                 <span class="zn-pupil"></span>${ir}<div class="zv"></div>`;
+//         },
+//         /* MATRIX — the fireball that clears the board */
+//         matrix() {
+//             let lk = '';
+//             const N = mob() ? 10 : 18;
+//             for (let i = 0; i < N; i++)
+//                 lk += `<span class="zm-lick" style="transform:rotate(${(i * 360 / N + rnd(-8, 8)).toFixed(1)}deg);
+//                     animation-delay:${Math.round(rnd(Z * .16, Z * .4))}ms"></span>`;
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(44,12,2,.5),rgba(26,6,0,.28))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle,#fff6e0,rgba(255,110,30,.42) 40%,transparent 74%)"></div>
+//                 <span class="zm-heat"></span>${lk}<span class="zm-fire"></span>
+//                 <div class="zv"></div>
+//                 <span class="zw" style="border-color:rgba(255,178,88,.95)"></span>
+//                 <span class="zw" style="border-color:rgba(255,110,36,.6);animation-delay:140ms"></span>`;
+//         },
+//         /* GRAPH — the web wakes up and signals travel it */
+//         graph() {
+//             const N = mob() ? 11 : tab() ? 15 : 20, pts = [];
+//             let h = '';
+//             for (let i = 0; i < N; i++) {
+//                 const a = (i / N) * Math.PI * 2 + rnd(-.25, .25), r = rnd(13, 34);
+//                 const x = 50 + Math.cos(a) * r, y = 50 + Math.sin(a) * r * .82;
+//                 pts.push([x, y]);
+//                 const s = rnd(7, 19);
+//                 h += `<span class="zg-node" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;
+//                     width:${s.toFixed(0)}px;height:${s.toFixed(0)}px;animation-delay:${i * 20}ms"></span>`;
+//             }
+//             pts.forEach(([x, y], i) => {
+//                 [1, 2].forEach((off, j) => {
+//                     const [x2, y2] = pts[(i + off + j) % N];
+//                     const dx = (x2 - x) / 100 * window.innerWidth, dy = (y2 - y) / 100 * window.innerHeight;
+//                     const len = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+//                     h += `<span class="zg-edge" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;
+//                         width:${len.toFixed(0)}px;transform:rotate(${ang.toFixed(1)}deg);
+//                         animation-delay:${i * 20 + 40}ms"></span>`;
+//                     if (j === 0 && i % 2 === 0)
+//                         h += `<span class="zg-pulse" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;
+//                             --pl:${len.toFixed(0)}px;transform:rotate(${ang.toFixed(1)}deg);
+//                             animation-delay:${i * 20 + 90}ms"></span>`;
+//                 });
+//             });
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(6,14,30,.46),rgba(4,10,24,.26))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle,rgb(var(--accent-rgb) / .5),transparent 62%)"></div>
+//                 ${h}<div class="zv"></div>
+//                 <span class="zw" style="border-color:rgb(var(--accent-rgb) / .85)"></span>`;
+//         },
+//         /* MEETING — minds linking */
+//         meet() {
+//             let r = '', b = '', w = '';
+//             for (let i = 0; i < 6; i++) r += `<span class="zq-rip" style="animation-delay:${i * 72}ms"></span>`;
+//             for (let i = 0; i < 5; i++)
+//                 b += `<span class="zq-beam" style="transform:rotate(${((i - 2) * 26).toFixed(0)}deg);
+//                     animation-delay:${i * 52}ms"></span>`;
+//             for (let i = 0; i < (mob() ? 5 : 9); i++)
+//                 w += `<span class="zq-wave" style="top:${(12 + i * 9.5).toFixed(1)}%;
+//                     animation-delay:${Math.round(rnd(0, Z * .4))}ms"></span>`;
+//             let seal = '<circle cx="50" cy="50" r="47"/><circle cx="50" cy="50" r="36"/><circle cx="50" cy="50" r="12"/>'
+//                 + '<path d="M50 3 L91 74 L9 74 Z"/><path d="M50 97 L9 26 L91 26 Z"/>';
+//             for (let i = 0; i < 8; i++) {
+//                 const a = i * 45 * Math.PI / 180;
+//                 seal += `<line x1="${(50 + Math.cos(a) * 36).toFixed(1)}" y1="${(50 + Math.sin(a) * 36).toFixed(1)}"
+//                     x2="${(50 + Math.cos(a) * 47).toFixed(1)}" y2="${(50 + Math.sin(a) * 47).toFixed(1)}"/>`;
+//             }
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(18,8,42,.5),rgba(10,4,28,.28))"></div>
+//                 <div class="zb" style="background:radial-gradient(circle,#f2eaff,rgba(150,110,255,.34) 42%,transparent 74%)"></div>
+//                 ${w}${b}<svg class="zq-seal" viewBox="0 0 100 100">${seal}</svg>${r}<div class="zv"></div>`;
+//         },
+//         /* TODAY — sunrise over the page */
+//         today() {
+//             const N = mob() ? 13 : 21;
+//             let rays = '', motes = '';
+//             for (let i = 0; i < N; i++) {
+//                 const a = -80 + (i / (N - 1)) * 160 + rnd(-4, 4), w = rnd(26, 74);
+//                 rays += `<span class="zd-ray" style="width:${w.toFixed(0)}px;margin-left:${(-w / 2).toFixed(0)}px;
+//                     transform:rotate(${a.toFixed(1)}deg);animation-delay:${Math.round(Math.abs(a) * 2.2 + rnd(0, 60))}ms"></span>`;
+//             }
+//             for (let i = 0; i < (mob() ? 11 : 22); i++)
+//                 motes += `<span class="zd-mote" style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(12, 84).toFixed(1)}%;
+//                     animation-delay:${Math.round(rnd(Z * .18, Z * .55))}ms"></span>`;
+//             return `<div class="za" style="background:linear-gradient(180deg,rgba(255,214,140,.34),rgba(255,180,90,.14))"></div>
+//                 <span class="zd-sun"></span><span class="zd-flare"></span>
+//                 <span class="zd-fan">${rays}</span>${motes}
+//                 <span class="zw" style="border-color:rgba(255,214,140,.8)"></span>`;
+//         }
+//     };
 
-    /* ---------- dispel (Esc) ---------- */
-    function dispel() {
-        if (busy) return;
-        busy = true;
-        let sh = '';
-        const N = mob() ? 12 : 22;
-        for (let i = 0; i < N; i++)
-            sh += `<span class="ze-shard" style="transform:rotate(${(i * 360 / N).toFixed(1)}deg);
-                animation-delay:${i * 9}ms"></span>`;
-        L.innerHTML = `<div class="ze-flash"></div>${sh}
-            <span class="ze-ring"></span><span class="ze-ring" style="animation-delay:70ms"></span>
-            <div class="ze-scan"></div>`;
-        S.className = 'on esc';
-        setTimeout(() => { S.className = ''; L.innerHTML = ''; busy = false; }, ZE + 80);
-    }
+//     /* ---------- dispel (Esc) ---------- */
+//     function dispel() {
+//         if (busy) return;
+//         busy = true;
+//         let sh = '';
+//         const N = mob() ? 12 : 22;
+//         for (let i = 0; i < N; i++)
+//             sh += `<span class="ze-shard" style="transform:rotate(${(i * 360 / N).toFixed(1)}deg);
+//                 animation-delay:${i * 9}ms"></span>`;
+//         L.innerHTML = `<div class="ze-flash"></div>${sh}
+//             <span class="ze-ring"></span><span class="ze-ring" style="animation-delay:70ms"></span>
+//             <div class="ze-scan"></div>`;
+//         S.className = 'on esc';
+//         setTimeout(() => { S.className = ''; L.innerHTML = ''; busy = false; }, ZE + 80);
+//     }
 
-    /* ---------- play ---------- */
-    function play(kind, dir, cb) {
-        if (busy || !B[kind] || (window.zdFx && !zdFx(kind))) { if (cb) cb(); return; }
-        busy = true;
-        L.innerHTML = B[kind]();
-        S.className = 'on ' + dir;
-        if (cb) setTimeout(cb, Math.round(Z * (dir === 'in' ? ZM : .46)));
-        setTimeout(() => { S.className = ''; L.innerHTML = ''; busy = false; }, Z + 110);
-    }
-    window.zdPlayFx = play;
-    window.zdDispel = dispel;
+//     /* ---------- play ---------- */
+//     function play(kind, dir, cb) {
+//         if (busy || !B[kind] || (window.zdFx && !zdFx(kind))) { if (cb) cb(); return; }
+//         busy = true;
+//         L.innerHTML = B[kind]();
+//         S.className = 'on ' + dir;
+//         if (cb) setTimeout(cb, Math.round(Z * (dir === 'in' ? ZM : .46)));
+//         setTimeout(() => { S.className = ''; L.innerHTML = ''; busy = false; }, Z + 110);
+//     }
+//     window.zdPlayFx = play;
+//     window.zdDispel = dispel;
 
-    /* ---------- Esc detection ---------- */
-    let escAt = 0;
-    window.addEventListener('keydown', e => { if (e.key === 'Escape') escAt = Date.now(); }, true);
+//     /* ---------- Esc detection ---------- */
+//     let escAt = 0;
+//     window.addEventListener('keydown', e => { if (e.key === 'Escape') escAt = Date.now(); }, true);
 
-    /* ---------- wire the sections ---------- */
-    [['openHome', 'closeHome', 'home'], ['openDailyNote', null, 'today'],
-     ['openCalendar', 'closeCalendar', 'month'], ['openKanban', 'closeKanban', 'board'],
-     ['openCanvas', 'closeCanvas', 'canvas'], ['openTemplates', 'closeTemplates', 'tmpl'],
-     ['openEisenhower', 'closeEisenhower', 'matrix'], ['openGraph', 'closeGraph', 'graph'],
-     ['openMeeting', 'closeMeeting', 'meet']].forEach(([o, c, k]) => {
-        const fo = window[o];
-        if (typeof fo === 'function') {
-            window[o] = function () {
-                const self = this, args = arguments;
-                let out;
-                play(k, 'in', () => { out = fo.apply(self, args); });
-                return out;
-            };
-        }
-        if (c && typeof window[c] === 'function') {
-            const fc = window[c];
-            window[c] = function () {
-                const r = fc.apply(this, arguments);
-                /* leaving by Esc gets the dispel instead of the section's own effect */
-                if (Date.now() - escAt < 400) { if (!window.zdFx || zdFx(k)) dispel(); }
-                else play(k, 'out');
-                return r;
-            };
-        }
-    });
+//     /* ---------- wire the sections ---------- */
+//     [['openHome', 'closeHome', 'home'], ['openDailyNote', null, 'today'],
+//      ['openCalendar', 'closeCalendar', 'month'], ['openKanban', 'closeKanban', 'board'],
+//      ['openCanvas', 'closeCanvas', 'canvas'], ['openTemplates', 'closeTemplates', 'tmpl'],
+//      ['openEisenhower', 'closeEisenhower', 'matrix'], ['openGraph', 'closeGraph', 'graph'],
+//      ['openMeeting', 'closeMeeting', 'meet']].forEach(([o, c, k]) => {
+//         const fo = window[o];
+//         if (typeof fo === 'function') {
+//             window[o] = function () {
+//                 const self = this, args = arguments;
+//                 let out;
+//                 play(k, 'in', () => { out = fo.apply(self, args); });
+//                 return out;
+//             };
+//         }
+//         if (c && typeof window[c] === 'function') {
+//             const fc = window[c];
+//             window[c] = function () {
+//                 const r = fc.apply(this, arguments);
+//                 /* leaving by Esc gets the dispel instead of the section's own effect */
+//                 if (Date.now() - escAt < 400) { if (!window.zdFx || zdFx(k)) dispel(); }
+//                 else play(k, 'out');
+//                 return r;
+//             };
+//         }
+//     });
 
-    /* ---------- The Grid: gate ITS tunnel, never add a second effect ---------- */
-    function syncGrid() {
-        document.body.classList.toggle('zfx-no-grid', !!(window.zdFx && !zdFx('grid')));
-    }
-    const _ot = window.openTrackers;
-    if (typeof _ot === 'function') window.openTrackers = function () { syncGrid(); return _ot.apply(this, arguments); };
-    const _ct = window.closeTrackers;
-    if (typeof _ct === 'function') window.closeTrackers = function () { syncGrid(); return _ct.apply(this, arguments); };
-    const _fxt = window.fxToggle;
-    if (typeof _fxt === 'function') window.fxToggle = function () { const r = _fxt.apply(this, arguments); syncGrid(); return r; };
-    setTimeout(syncGrid, 1200);
+//     /* ---------- The Grid: gate ITS tunnel, never add a second effect ---------- */
+//     function syncGrid() {
+//         document.body.classList.toggle('zfx-no-grid', !!(window.zdFx && !zdFx('grid')));
+//     }
+//     const _ot = window.openTrackers;
+//     if (typeof _ot === 'function') window.openTrackers = function () { syncGrid(); return _ot.apply(this, arguments); };
+//     const _ct = window.closeTrackers;
+//     if (typeof _ct === 'function') window.closeTrackers = function () { syncGrid(); return _ct.apply(this, arguments); };
+//     const _fxt = window.fxToggle;
+//     if (typeof _fxt === 'function') window.fxToggle = function () { const r = _fxt.apply(this, arguments); syncGrid(); return r; };
+//     setTimeout(syncGrid, 1200);
 
-    /* ---------- theme switch gate ---------- */
-    const _tt = window.toggleTheme;
-    if (typeof _tt === 'function') {
-        window.toggleTheme = function () {
-            if (window.zdFx && !zdFx('theme')) {
-                const c = document.getElementById('crt');
-                if (c) { c.style.display = 'none'; setTimeout(() => { c.style.display = ''; }, 60); }
-            }
-            return _tt.apply(this, arguments);
-        };
-    }
-})();
+//     /* ---------- theme switch gate ---------- */
+//     const _tt = window.toggleTheme;
+//     if (typeof _tt === 'function') {
+//         window.toggleTheme = function () {
+//             if (window.zdFx && !zdFx('theme')) {
+//                 const c = document.getElementById('crt');
+//                 if (c) { c.style.display = 'none'; setTimeout(() => { c.style.display = ''; }, 60); }
+//             }
+//             return _tt.apply(this, arguments);
+//         };
+//     }
+// })();
 
     /* ============================================================
        INIT
